@@ -37,3 +37,9 @@ releases/*.tar.gz
 # Temporary files
 *.tmp
 *.temp
+
+# Documentation and non-essential files
+product-context/
+VERSIONING_STRATEGY.md
+GITHUB_SETUP.md
+RELEASE_CHECKLIST.md
