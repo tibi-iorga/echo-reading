@@ -119,7 +119,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     
     const providers = llmService.getAvailableProviders()
     // Filter to only show OpenAI
-    const openAIProviders = providers.filter(p => p === 'OpenAI')
+    const openAIProviders = providers.filter(p => p === 'OpenAI') as string[]
     setAvailableProviders(openAIProviders)
     
     if (storedProvider && openAIProviders.includes(storedProvider)) {
@@ -127,9 +127,10 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       setSavedProvider(storedProvider)
       llmService.setProvider(storedProvider)
     } else if (openAIProviders.length > 0) {
-      setProvider(openAIProviders[0])
-      setSavedProvider(openAIProviders[0])
-      llmService.setProvider(openAIProviders[0])
+      const defaultProvider = openAIProviders[0]
+      setProvider(defaultProvider)
+      setSavedProvider(defaultProvider)
+      llmService.setProvider(defaultProvider)
     }
 
     // Load document metadata if available
