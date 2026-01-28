@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+app/node_modules/
+
+# Build outputs
+dist/
+app/dist/
+dist-ssr/
+app/dist-ssr/
+
+# Logs
+*.log
+logs/
+.cursor/debug.log
+
+# Environment files
+.env
+.env.local
+*.local
+
+# IDE files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Release archives (optional - you might want to track these)
+releases/*.zip
+releases/*.tar.gz
+
+# Temporary files
+*.tmp
+*.temp

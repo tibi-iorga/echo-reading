@@ -1,0 +1,749 @@
+import { useState, useEffect, useRef } from 'react'
+import { llmService } from '@/services/llm/llmService'
+import { storageService } from '@/services/storage/storageService'
+import { fileSyncService } from '@/services/fileSync/fileSyncService'
+import { importAnnotations, readFileAsText } from '@/utils/import'
+import { useTheme } from '@/contexts/ThemeContext'
+
+interface SettingsPanelProps {
+  documentMetadata?: { title: string; author: string | null } | null
+  onDocumentMetadataChange?: (metadata: { title: string; author: string | null }) => void
+  pdfId?: string | null
+  onReloadAnnotations?: () => void
+  expandSyncFileSection?: boolean
+  onSyncFileSectionExpanded?: () => void
+}
+
+const DEFAULT_CHAT_INSTRUCTIONS = `You are a helpful reading assistant for someone reading non-fiction PDFs. Your role is to help users deeply understand the material they are reading.
+
+When users share text from their PDF:
+- Provide clear, accurate explanations
+- Help clarify complex concepts
+- Connect ideas to broader themes when relevant
+- Ask follow-up questions if the user's question is unclear
+- Be concise but thorough
+
+The user is actively reading and learning, so prioritize clarity and understanding over brevity.`
+
+function formatRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffSeconds = Math.floor(diffMs / 1000)
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  const diffHours = Math.floor(diffMinutes / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffSeconds < 60) {
+    return 'just now'
+  } else if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+  } else if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+  } else {
+    return date.toLocaleDateString()
+  }
+}
+
+export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfId, onReloadAnnotations, expandSyncFileSection, onSyncFileSectionExpanded }: SettingsPanelProps = {}) {
+  const { theme, toggleTheme } = useTheme()
+  const [apiKey, setApiKey] = useState('')
+  const [provider, setProvider] = useState('')
+  const [availableProviders, setAvailableProviders] = useState<string[]>([])
+  const [chatInstructions, setChatInstructions] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [docTitle, setDocTitle] = useState('')
+  const [docAuthor, setDocAuthor] = useState('')
+  const [syncFileName, setSyncFileName] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isChangingFile, setIsChangingFile] = useState(false)
+  const [isCreatingFile, setIsCreatingFile] = useState(false)
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const [isStyleExpanded, setIsStyleExpanded] = useState(true)
+  const [isLLMConfigExpanded, setIsLLMConfigExpanded] = useState(true)
+  const [isDocumentInfoExpanded, setIsDocumentInfoExpanded] = useState(true)
+  const [isSourceFileExpanded, setIsSourceFileExpanded] = useState(true)
+  const syncFileSectionRef = useRef<HTMLDivElement>(null)
+  
+  // Expand sync file section when requested and scroll to it
+  useEffect(() => {
+    if (expandSyncFileSection) {
+      setIsSourceFileExpanded(true)
+      // Scroll to the sync file section after a short delay to ensure it's rendered
+      setTimeout(() => {
+        if (syncFileSectionRef.current) {
+          syncFileSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+      // Notify parent that expansion has been applied
+      if (onSyncFileSectionExpanded) {
+        onSyncFileSectionExpanded()
+      }
+    }
+  }, [expandSyncFileSection, onSyncFileSectionExpanded])
+  const [isChatInstructionsExpanded, setIsChatInstructionsExpanded] = useState(true)
+  
+  // Track saved values to detect unsaved changes
+  const [savedApiKey, setSavedApiKey] = useState('')
+  const [savedProvider, setSavedProvider] = useState('')
+  const [savedChatInstructions, setSavedChatInstructions] = useState('')
+  const [savedDocTitle, setSavedDocTitle] = useState('')
+  const [savedDocAuthor, setSavedDocAuthor] = useState('')
+
+  useEffect(() => {
+    const storedKey = storageService.getApiKey()
+    const storedProvider = storageService.getProvider()
+    const storedInstructions = storageService.getChatInstructions()
+    
+    if (storedKey) {
+      setApiKey(storedKey)
+      setSavedApiKey(storedKey)
+    }
+    
+    if (storedInstructions) {
+      setChatInstructions(storedInstructions)
+      setSavedChatInstructions(storedInstructions)
+    } else {
+      setChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
+      setSavedChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
+    }
+    
+    const providers = llmService.getAvailableProviders()
+    setAvailableProviders(providers)
+    
+    if (storedProvider && providers.includes(storedProvider)) {
+      setProvider(storedProvider)
+      setSavedProvider(storedProvider)
+      llmService.setProvider(storedProvider)
+    } else if (providers.length > 0) {
+      setProvider(providers[0])
+      setSavedProvider(providers[0])
+      llmService.setProvider(providers[0])
+    }
+
+    // Load document metadata if available
+    if (documentMetadata) {
+      setDocTitle(documentMetadata.title)
+      setDocAuthor(documentMetadata.author || '')
+      setSavedDocTitle(documentMetadata.title)
+      setSavedDocAuthor(documentMetadata.author || '')
+    } else if (pdfId) {
+      const stored = storageService.getDocumentMetadata(pdfId)
+      if (stored) {
+        setDocTitle(stored.title)
+        setDocAuthor(stored.author || '')
+        setSavedDocTitle(stored.title)
+        setSavedDocAuthor(stored.author || '')
+      }
+    }
+
+    // Load sync file name and last updated time
+    const fileName = fileSyncService.getSyncFileName()
+    setSyncFileName(fileName)
+    
+    // Fetch last updated time if file exists
+    const updateLastModified = async () => {
+      if (fileName && fileSyncService.hasSyncFile()) {
+        try {
+          const time = await fileSyncService.getLastModifiedTime()
+          setLastUpdated(time)
+        } catch {
+          setLastUpdated(null)
+        }
+      } else {
+        setLastUpdated(null)
+      }
+    }
+    
+    updateLastModified()
+    
+    // Set up periodic refresh of last modified time (every 5 seconds)
+    const intervalId = setInterval(updateLastModified, 5000)
+    
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [documentMetadata, pdfId])
+
+  const hasUnsavedChanges = () => {
+    const apiKeyChanged = apiKey.trim() !== savedApiKey
+    const providerChanged = provider !== savedProvider
+    const instructionsChanged = chatInstructions.trim() !== savedChatInstructions
+    const titleChanged = pdfId ? docTitle.trim() !== savedDocTitle : false
+    const authorChanged = pdfId ? (docAuthor.trim() || '') !== (savedDocAuthor || '') : false
+    
+    return apiKeyChanged || providerChanged || instructionsChanged || titleChanged || authorChanged
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    
+    // Small delay to show button state change
+    await new Promise(resolve => setTimeout(resolve, 150))
+    
+    if (apiKey.trim()) {
+      storageService.setApiKey(apiKey.trim())
+      setSavedApiKey(apiKey.trim())
+    }
+    if (provider) {
+      storageService.setProvider(provider)
+      setSavedProvider(provider)
+      llmService.setProvider(provider)
+    }
+    if (chatInstructions.trim()) {
+      storageService.setChatInstructions(chatInstructions.trim())
+      setSavedChatInstructions(chatInstructions.trim())
+    }
+
+    // Save document metadata if PDF is loaded
+    if (pdfId && docTitle.trim()) {
+      const metadata = { title: docTitle.trim(), author: docAuthor.trim() || null }
+      storageService.setDocumentMetadata(pdfId, metadata)
+      setSavedDocTitle(docTitle.trim())
+      setSavedDocAuthor(docAuthor.trim() || '')
+      if (onDocumentMetadataChange) {
+        onDocumentMetadataChange(metadata)
+      }
+    }
+    
+    setIsSaving(false)
+    setShowSuccess(true)
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => {
+      setShowSuccess(false)
+    }, 3000)
+  }
+
+  const handleChangeSourceFile = async () => {
+    if (!pdfId) return
+    
+    setIsChangingFile(true)
+    
+    try {
+      if (!fileSyncService.isSupported()) {
+        alert('File System Access API is not supported in this browser.')
+        setIsChangingFile(false)
+        return
+      }
+
+      const fileHandle = await fileSyncService.requestFileHandle()
+      
+      if (!fileHandle) {
+        // User cancelled
+        setIsChangingFile(false)
+        return
+      }
+
+      const file = await fileHandle.getFile()
+      const content = await readFileAsText(file)
+      const result = importAnnotations(content)
+
+      if (!result.success) {
+        alert(result.error || 'Failed to import notes from the selected file')
+        setIsChangingFile(false)
+        return
+      }
+
+      await fileSyncService.setSyncFile(fileHandle, file.name)
+      setSyncFileName(file.name)
+      
+      // Update last modified time
+      const lastModified = await fileSyncService.getLastModifiedTime()
+      setLastUpdated(lastModified)
+      
+      // Load page data from sync file (source of truth) and update localStorage
+      // Use force=true to override localStorage (sync file takes precedence)
+      try {
+        const syncData = await fileSyncService.readSyncData()
+        
+        if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
+          await storageService.saveFurthestPage(pdfId, syncData.furthestPage, true)
+        }
+        
+        if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
+          await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
+        }
+      } catch (error) {
+        console.warn('Failed to load page data from sync file:', error)
+      }
+      
+      // Save annotations to storage for the current PDF
+      if (result.annotations.length > 0) {
+        await storageService.saveAnnotations(pdfId, result.annotations)
+      } else {
+        // If the file is empty, clear annotations
+        await storageService.saveAnnotations(pdfId, [])
+      }
+      
+      // Reload annotations from storage
+      if (onReloadAnnotations) {
+        onReloadAnnotations()
+      }
+      
+      // Notify parent that sync file was connected (to hide warning banner and reload page data)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('syncFileCreated'))
+        window.dispatchEvent(new CustomEvent('syncFileChanged'))
+      }, 100)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to change sync file')
+    } finally {
+      setIsChangingFile(false)
+    }
+  }
+
+  const handleCreateNewFile = async () => {
+    if (!pdfId) return
+    
+    setIsCreatingFile(true)
+    
+    try {
+      if (!fileSyncService.isSupported()) {
+        alert('File System Access API is not supported in this browser.')
+        setIsCreatingFile(false)
+        return
+      }
+
+      const baseName = documentMetadata?.title || 'notes'
+      const sanitizedBaseName = baseName.replace(/[^a-z0-9]/gi, '_')
+      const fileName = `${sanitizedBaseName}_sync_notes.json`
+
+      const fileHandle = await fileSyncService.createFileHandle(fileName)
+
+      if (!fileHandle) {
+        // User cancelled
+        setIsCreatingFile(false)
+        return
+      }
+
+      await fileSyncService.setSyncFile(fileHandle, fileName)
+      setSyncFileName(fileName)
+      
+      // Get current annotations and page data from storage and write them to the new file
+      const currentAnnotations = storageService.getAnnotations(pdfId)
+      const furthestPage = storageService.getFurthestPage(pdfId)
+      const lastPageRead = storageService.getLastPageRead(pdfId)
+      await fileSyncService.writeAnnotationsWithPages(currentAnnotations, furthestPage, lastPageRead)
+      
+      // Update last modified time after writing
+      const lastModified = await fileSyncService.getLastModifiedTime()
+      setLastUpdated(lastModified)
+      
+      // Reload annotations (this will sync them properly)
+      if (onReloadAnnotations) {
+        onReloadAnnotations()
+      }
+      
+      // Notify parent that sync file was created (to hide warning banner)
+      if (onSyncFileSectionExpanded) {
+        // Small delay to ensure state updates propagate
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('syncFileCreated'))
+        }, 100)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create file')
+    } finally {
+      setIsCreatingFile(false)
+    }
+  }
+
+  const handleDisconnectFile = async () => {
+    if (!pdfId) return
+    
+    if (!confirm('Are you sure you want to disconnect the notes file? Your notes will still be saved locally, but they won\'t sync across browsers or devices.')) {
+      return
+    }
+    
+    setIsDisconnecting(true)
+    
+    try {
+      await fileSyncService.clearSyncFile()
+      setSyncFileName(null)
+      setLastUpdated(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to disconnect file')
+    } finally {
+      setIsDisconnecting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <button
+          onClick={() => setIsStyleExpanded(!isStyleExpanded)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Style</h2>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isStyleExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {isStyleExpanded && (
+          <div className="px-4 pb-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Appearance
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Switch between light and dark mode
+                </p>
+              </div>
+              <button
+                onClick={toggleTheme}
+                type="button"
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm font-medium text-gray-900 dark:text-white transition-colors flex items-center gap-2"
+                aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              >
+                {theme === 'light' ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    <span>Dark Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    <span>Light Mode</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <button
+          onClick={() => setIsLLMConfigExpanded(!isLLMConfigExpanded)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">LLM Configuration</h2>
+          <svg
+            className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isLLMConfigExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {isLLMConfigExpanded && (
+          <div className="px-4 pb-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Provider
+            </label>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              {availableProviders.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              API Key
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Enter your API key"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Your API key is stored locally and never sent to our servers
+            </p>
+          </div>
+          </div>
+        )}
+      </div>
+
+      {pdfId && (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+          <button
+            onClick={() => setIsDocumentInfoExpanded(!isDocumentInfoExpanded)}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Document Information</h2>
+            <svg
+              className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isDocumentInfoExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {isDocumentInfoExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Title <span className="text-red-500 dark:text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={docTitle}
+                onChange={(e) => setDocTitle(e.target.value)}
+                placeholder="Document title"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Author
+              </label>
+              <input
+                type="text"
+                value={docAuthor}
+                onChange={(e) => setDocAuthor(e.target.value)}
+                placeholder="Author name (optional)"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              />
+            </div>
+          </div>
+          )}
+        </div>
+      )}
+
+      {pdfId && (
+        <div ref={syncFileSectionRef} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+          <button
+            onClick={() => setIsSourceFileExpanded(!isSourceFileExpanded)}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Sync File</h2>
+            <svg
+              className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isSourceFileExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {isSourceFileExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Current File
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  {syncFileName 
+                    ? 'The file where your notes are saved and synced'
+                    : 'No sync file connected. Your notes are only saved locally in this browser.'}
+                </p>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                    {syncFileName || 'No file selected'}
+                  </div>
+                  {syncFileName && (
+                    <button
+                      onClick={handleDisconnectFile}
+                      disabled={isDisconnecting}
+                      className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Disconnect file"
+                      aria-label="Disconnect file"
+                    >
+                      {isDisconnecting ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {syncFileName && lastUpdated && (
+                  <p 
+                    className="text-sm text-gray-500 dark:text-gray-400"
+                    title={lastUpdated.toLocaleString()}
+                  >
+                    Last updated: {formatRelativeTime(lastUpdated)}
+                  </p>
+                )}
+              </div>
+
+              {syncFileName ? (
+                <button
+                  onClick={handleChangeSourceFile}
+                  disabled={isChangingFile}
+                  className="w-full px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {isChangingFile ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Changing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span>Change Sync File</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    onClick={handleCreateNewFile}
+                    disabled={isCreatingFile}
+                    className="w-full px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isCreatingFile ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Create Sync File</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleChangeSourceFile}
+                    disabled={isChangingFile}
+                    className="w-full px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isChangingFile ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Select Existing File</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <button
+          onClick={() => setIsChatInstructionsExpanded(!isChatInstructionsExpanded)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chat Instructions</h2>
+          <svg
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isChatInstructionsExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {isChatInstructionsExpanded && (
+          <div className="px-4 pb-4 space-y-4">
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              These instructions are sent to the LLM as system context to guide how it responds. 
+              Customize this to control the assistant's behavior, tone, and focus areas.
+            </p>
+            <textarea
+              value={chatInstructions}
+              onChange={(e) => setChatInstructions(e.target.value)}
+              placeholder="Enter system instructions for the LLM..."
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500"
+              rows={12}
+            />
+          </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <button
+          onClick={handleSave}
+          disabled={isSaving || (pdfId ? !docTitle.trim() : false)}
+          className={`px-4 py-2 text-white rounded transition-all duration-200 flex items-center gap-2 ${
+            showSuccess
+              ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+              : hasUnsavedChanges()
+              ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
+              : 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {showSuccess ? (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Saved</span>
+            </>
+          ) : isSaving ? (
+            <>
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Saving...</span>
+            </>
+          ) : hasUnsavedChanges() ? (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>Save Settings (unsaved changes)</span>
+            </>
+          ) : (
+            <span>Save Settings</span>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
