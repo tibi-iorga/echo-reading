@@ -293,31 +293,34 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       // Get system instructions from storage
       let systemInstructions = storageService.getChatInstructions() || ''
 
-      // Build document context string
-      let documentContext = ''
+      // Replace document metadata placeholders in system instructions
       if (documentMetadata) {
+        systemInstructions = systemInstructions.replace(
+          /\{\{document_title\}\}/g,
+          documentMetadata.title || 'Unknown Document'
+        )
+        // Handle author placeholder: include " by Author" or remove the placeholder entirely
         if (documentMetadata.author) {
-          documentContext = `[Document: "${documentMetadata.title}" by ${documentMetadata.author}]\n\n`
+          systemInstructions = systemInstructions.replace(
+            /\{\{document_author\}\}/g,
+            ` by ${documentMetadata.author}`
+          )
         } else {
-          documentContext = `[Document: "${documentMetadata.title}"]\n\n`
+          systemInstructions = systemInstructions.replace(/\{\{document_author\}\}/g, '')
         }
+      } else {
+        // No document metadata available, use fallback values
+        systemInstructions = systemInstructions.replace(
+          /\{\{document_title\}\}/g,
+          'a document'
+        )
+        systemInstructions = systemInstructions.replace(/\{\{document_author\}\}/g, '')
       }
 
       // Add page context if toggle is enabled and page text is available
       if (includePageContext && currentPageText && currentPageText.trim()) {
-        const pageContext = `[Current Page ${currentPage || '?'} Content]\n${currentPageText.trim()}\n\n`
-        if (documentContext) {
-          documentContext = documentContext + pageContext
-        } else {
-          documentContext = pageContext
-        }
-      }
-
-      // Prepend document context to system instructions
-      if (documentContext && systemInstructions) {
-        systemInstructions = documentContext + systemInstructions
-      } else if (documentContext) {
-        systemInstructions = documentContext.trim()
+        const pageContext = `\n\n[Current Page ${currentPage || '?'} Content]\n${currentPageText.trim()}`
+        systemInstructions = systemInstructions + pageContext
       }
 
       // Send to LLM with conversation history

@@ -15,7 +15,9 @@ interface SettingsPanelProps {
   onSyncFileSectionExpanded?: () => void
 }
 
-const DEFAULT_CHAT_INSTRUCTIONS = `You are a helpful reading assistant for someone reading non-fiction PDFs. Your role is to help users deeply understand the material they are reading.
+const DEFAULT_CHAT_INSTRUCTIONS = `You are a helpful reading assistant. The user is currently reading "{{document_title}}"{{document_author}}.
+
+Your role is to help users deeply understand the material they are reading.
 
 When users share text from their PDF:
 - Provide clear, accurate explanations
@@ -1035,10 +1037,25 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500"
               rows={12}
             />
+            <div className="flex justify-end mt-1">
+              <div className="relative group">
+                <span className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                  What's {'{{ }}'}?
+                </span>
+                <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-10 pointer-events-none">
+                  <div className="text-gray-300">
+                    <code className="px-1 py-0.5 bg-gray-700 rounded text-gray-200">{'{{document_title}}'}</code> and <code className="px-1 py-0.5 bg-gray-700 rounded text-gray-200">{'{{document_author}}'}</code> are automatically replaced with the current document's information.
+                  </div>
+                  <div className="absolute top-full right-4 -mt-1">
+                    <div className="w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           
           {/* Save button for Chat Instructions */}
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
             <button
               onClick={handleSaveInstructions}
               disabled={isSavingInstructions || !hasUnsavedInstructionsChanges()}
@@ -1069,6 +1086,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                 <span>Save Changes</span>
               )}
             </button>
+            {chatInstructions !== DEFAULT_CHAT_INSTRUCTIONS && (
+              <button
+                onClick={() => {
+                  setChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
+                }}
+                className="w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 transition-colors text-sm"
+              >
+                Reset to Default
+              </button>
+            )}
           </div>
           </div>
         )}
