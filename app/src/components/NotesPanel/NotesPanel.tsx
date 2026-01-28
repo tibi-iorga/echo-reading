@@ -36,6 +36,7 @@ interface NotesPanelProps {
   resetFilterTrigger?: number
   onExpandSyncFileSection?: () => void
   expandSyncFileSection?: boolean
+  onSyncFileSectionExpanded?: () => void
 }
 
 export function NotesPanel({

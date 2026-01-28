@@ -20,6 +20,7 @@ interface PDFViewerProps {
   highlights?: Array<{ id: string; pageNumber: number; text: string; coordinates?: { x: number; y: number; width: number; height: number } }>
   currentPage?: number
   onPageChange?: (page: number) => void
+  onNavigateToPage?: (pageNumber: number) => void
   onScaleChange?: (scale: number) => void
   onNumPagesChange?: (numPages: number) => void
   scale?: number
@@ -219,7 +220,6 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
       
       // Get the text layer's position relative to viewport
       const textLayerRect = textLayer.getBoundingClientRect()
-      const pageWrapperRect = pageWrapper.getBoundingClientRect()
       const containerRect = containerRef.current.getBoundingClientRect()
       
       // Store individual rectangles for each line of the selection

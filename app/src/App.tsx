@@ -9,7 +9,7 @@ import { FileSelector } from '@/components/FileSelector/FileSelector'
 import { OpenFileModal } from '@/components/OpenFileModal/OpenFileModal'
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle'
 import { exportToMarkdown, downloadMarkdown } from '@/utils/export'
-import { llmService } from '@/services/llm/llmService'
+// import { llmService } from '@/services/llm/llmService' // Unused
 import { storageService } from '@/services/storage/storageService'
 import { fileSyncService } from '@/services/fileSync/fileSyncService'
 import { parseFilename } from '@/utils/filenameParser'
@@ -19,7 +19,7 @@ function App() {
   const { pdf, loadPDF, clearPDF } = usePDF()
   const pdfId = pdf ? `${pdf.file.name}_${pdf.file.size}` : null
   const { annotations, addHighlight, updateHighlightNote, addNote, removeAnnotation, clearAllAnnotations, addBookmark, reloadAnnotations } = useAnnotations(pdfId)
-  const [selectedText, setSelectedText] = useState<{ text: string; pageNumber: number } | null>(null)
+  const [_selectedText, setSelectedText] = useState<{ text: string; pageNumber: number } | null>(null)
   const [quotedText, setQuotedText] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'settings'>('chat')
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -36,7 +36,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(384)
   const sidebarWidthDebounceRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleTextSelect = useCallback((text: string, pageNumber: number, position: { x: number; y: number }) => {
+  const handleTextSelect = useCallback((text: string, pageNumber: number, _position: { x: number; y: number }) => {
     setSelectedText({ text, pageNumber })
   }, [])
 
@@ -663,9 +663,11 @@ function App() {
               onClick={() => {
                 // Not manual forward navigation (shortcut navigation)
                 isManualForwardNavigationRef.current = false
-                const savedLastPageRead = storageService.getLastPageRead(pdfId)
-                if (savedLastPageRead !== null) {
-                  setCurrentPage(savedLastPageRead)
+                if (pdfId !== null) {
+                  const savedLastPageRead = storageService.getLastPageRead(pdfId)
+                  if (savedLastPageRead !== null) {
+                    setCurrentPage(savedLastPageRead)
+                  }
                 }
               }}
               className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm flex items-center justify-center h-[28px] text-gray-900 dark:text-white"
@@ -679,9 +681,11 @@ function App() {
               onClick={() => {
                 // Not manual forward navigation (shortcut navigation)
                 isManualForwardNavigationRef.current = false
-                const savedFurthestPage = storageService.getFurthestPage(pdfId)
-                if (savedFurthestPage !== null) {
-                  setCurrentPage(savedFurthestPage)
+                if (pdfId !== null) {
+                  const savedFurthestPage = storageService.getFurthestPage(pdfId)
+                  if (savedFurthestPage !== null) {
+                    setCurrentPage(savedFurthestPage)
+                  }
                 }
               }}
               className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm flex items-center justify-center h-[28px] text-gray-900 dark:text-white"
