@@ -4,6 +4,7 @@ import { storageService } from '@/services/storage/storageService'
 import { fileSyncService } from '@/services/fileSync/fileSyncService'
 import { importAnnotations, readFileAsText } from '@/utils/import'
 import { useTheme } from '@/contexts/ThemeContext'
+import { VERSION } from '@/constants/version'
 
 interface SettingsPanelProps {
   documentMetadata?: { title: string; author: string | null } | null
@@ -743,6 +744,12 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             <span>Save Settings</span>
           )}
         </button>
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+          Echo v{VERSION}
+        </p>
       </div>
     </div>
   )

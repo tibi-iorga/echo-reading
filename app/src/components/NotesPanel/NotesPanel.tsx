@@ -92,14 +92,8 @@ export function NotesPanel({
   useEffect(() => {
     const checkSyncFile = async () => {
       try {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/da4ec1e8-d16e-4eb1-ba8d-203aa9874bed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotesPanel.tsx:checkSyncFile',message:'Initializing fileSyncService',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
         await fileSyncService.initialize()
         const hasSync = fileSyncService.hasSyncFile()
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/da4ec1e8-d16e-4eb1-ba8d-203aa9874bed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotesPanel.tsx:checkSyncFile',message:'FileSyncService initialized',data:{hasSync},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
         setHasSyncFile(hasSync)
         // If sync file is created, clear dismissed state
         if (hasSync) {
@@ -109,9 +103,6 @@ export function NotesPanel({
           }
         }
       } catch (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/da4ec1e8-d16e-4eb1-ba8d-203aa9874bed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotesPanel.tsx:checkSyncFile',message:'FileSyncService init error',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
         setHasSyncFile(false)
       }
     }

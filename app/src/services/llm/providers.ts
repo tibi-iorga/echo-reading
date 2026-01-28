@@ -4,9 +4,6 @@ export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
 
   async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/da4ec1e8-d16e-4eb1-ba8d-203aa9874bed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'providers.ts:OpenAIProvider:sendMessage',message:'Sending to OpenAI',data:{messageLength:message.length,messagePreview:message.substring(0,200),hasQuotePrefix:message.startsWith('>'),hasHistory:!!conversationHistory,historyLength:conversationHistory?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const messages: Array<{ role: string; content: string }> = []
     
     // Add system instructions if provided
@@ -62,9 +59,6 @@ export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
 
   async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/da4ec1e8-d16e-4eb1-ba8d-203aa9874bed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'providers.ts:AnthropicProvider:sendMessage',message:'Sending to Anthropic',data:{messageLength:message.length,messagePreview:message.substring(0,200),hasQuotePrefix:message.startsWith('>'),hasHistory:!!conversationHistory,historyLength:conversationHistory?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const messages: Array<{ role: string; content: string }> = []
     
     // Add conversation history (excluding system messages, as we handle that separately)
