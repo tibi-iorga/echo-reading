@@ -1,5 +1,5 @@
 import type { LLMProvider } from '@/types'
-import { OpenAIProvider, AnthropicProvider } from './providers'
+import { OpenAIProvider } from './providers'
 
 class LLMService {
   private providers: Map<string, LLMProvider> = new Map()
@@ -7,7 +7,6 @@ class LLMService {
 
   constructor() {
     this.registerProvider(new OpenAIProvider())
-    this.registerProvider(new AnthropicProvider())
     this.currentProvider = this.providers.get('OpenAI') || null
   }
 

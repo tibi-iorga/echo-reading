@@ -53,10 +53,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   const [provider, setProvider] = useState('')
   const [availableProviders, setAvailableProviders] = useState<string[]>([])
   const [chatInstructions, setChatInstructions] = useState('')
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [docTitle, setDocTitle] = useState('')
   const [docAuthor, setDocAuthor] = useState('')
+  
+  // Per-section save states
+  const [isSavingLLM, setIsSavingLLM] = useState(false)
+  const [showSuccessLLM, setShowSuccessLLM] = useState(false)
+  const [isSavingDocument, setIsSavingDocument] = useState(false)
+  const [showSuccessDocument, setShowSuccessDocument] = useState(false)
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
+  const [showSuccessInstructions, setShowSuccessInstructions] = useState(false)
   const [syncFileName, setSyncFileName] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isChangingFile, setIsChangingFile] = useState(false)
@@ -112,16 +118,18 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }
     
     const providers = llmService.getAvailableProviders()
-    setAvailableProviders(providers)
+    // Filter to only show OpenAI
+    const openAIProviders = providers.filter(p => p === 'OpenAI')
+    setAvailableProviders(openAIProviders)
     
-    if (storedProvider && providers.includes(storedProvider)) {
+    if (storedProvider && openAIProviders.includes(storedProvider)) {
       setProvider(storedProvider)
       setSavedProvider(storedProvider)
       llmService.setProvider(storedProvider)
-    } else if (providers.length > 0) {
-      setProvider(providers[0])
-      setSavedProvider(providers[0])
-      llmService.setProvider(providers[0])
+    } else if (openAIProviders.length > 0) {
+      setProvider(openAIProviders[0])
+      setSavedProvider(openAIProviders[0])
+      llmService.setProvider(openAIProviders[0])
     }
 
     // Load document metadata if available
@@ -168,53 +176,105 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }
   }, [documentMetadata, pdfId])
 
-  const hasUnsavedChanges = () => {
+  // Check unsaved changes per section
+  const hasUnsavedLLMChanges = () => {
     const apiKeyChanged = apiKey.trim() !== savedApiKey
     const providerChanged = provider !== savedProvider
-    const instructionsChanged = chatInstructions.trim() !== savedChatInstructions
-    const titleChanged = pdfId ? docTitle.trim() !== savedDocTitle : false
-    const authorChanged = pdfId ? (docAuthor.trim() || '') !== (savedDocAuthor || '') : false
-    
-    return apiKeyChanged || providerChanged || instructionsChanged || titleChanged || authorChanged
+    return apiKeyChanged || providerChanged
   }
 
-  const handleSave = async () => {
-    setIsSaving(true)
+  const hasUnsavedDocumentChanges = () => {
+    if (!pdfId) return false
+    const titleChanged = docTitle.trim() !== savedDocTitle
+    const authorChanged = (docAuthor.trim() || '') !== (savedDocAuthor || '')
+    return titleChanged || authorChanged
+  }
+
+  const hasUnsavedInstructionsChanges = () => {
+    return chatInstructions.trim() !== savedChatInstructions
+  }
+
+  // Save handlers for each section
+  const handleSaveLLM = async () => {
+    setIsSavingLLM(true)
     
     // Small delay to show button state change
     await new Promise(resolve => setTimeout(resolve, 150))
     
+    const hadApiKeyBefore = !!storageService.getApiKey()
+    
+    // Handle API key: save if provided, remove if empty
     if (apiKey.trim()) {
       storageService.setApiKey(apiKey.trim())
       setSavedApiKey(apiKey.trim())
+    } else {
+      // Remove API key from storage if cleared
+      localStorage.removeItem('llm_api_key')
+      setSavedApiKey('')
     }
+    
     if (provider) {
       storageService.setProvider(provider)
       setSavedProvider(provider)
       llmService.setProvider(provider)
     }
-    if (chatInstructions.trim()) {
-      storageService.setChatInstructions(chatInstructions.trim())
-      setSavedChatInstructions(chatInstructions.trim())
-    }
-
-    // Save document metadata if PDF is loaded
-    if (pdfId && docTitle.trim()) {
-      const metadata = { title: docTitle.trim(), author: docAuthor.trim() || null }
-      storageService.setDocumentMetadata(pdfId, metadata)
-      setSavedDocTitle(docTitle.trim())
-      setSavedDocAuthor(docAuthor.trim() || '')
-      if (onDocumentMetadataChange) {
-        onDocumentMetadataChange(metadata)
-      }
+    
+    // Dispatch event if API key status changed (added or removed)
+    const hasApiKeyAfter = !!storageService.getApiKey()
+    if (hadApiKeyBefore !== hasApiKeyAfter) {
+      window.dispatchEvent(new CustomEvent('apiKeySaved'))
     }
     
-    setIsSaving(false)
-    setShowSuccess(true)
+    setIsSavingLLM(false)
+    setShowSuccessLLM(true)
     
     // Hide success message after 3 seconds
     setTimeout(() => {
-      setShowSuccess(false)
+      setShowSuccessLLM(false)
+    }, 3000)
+  }
+
+  const handleSaveDocument = async () => {
+    if (!pdfId || !docTitle.trim()) return
+    
+    setIsSavingDocument(true)
+    
+    // Small delay to show button state change
+    await new Promise(resolve => setTimeout(resolve, 150))
+    
+    const metadata = { title: docTitle.trim(), author: docAuthor.trim() || null }
+    storageService.setDocumentMetadata(pdfId, metadata)
+    setSavedDocTitle(docTitle.trim())
+    setSavedDocAuthor(docAuthor.trim() || '')
+    
+    if (onDocumentMetadataChange) {
+      onDocumentMetadataChange(metadata)
+    }
+    
+    setIsSavingDocument(false)
+    setShowSuccessDocument(true)
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => {
+      setShowSuccessDocument(false)
+    }, 3000)
+  }
+
+  const handleSaveInstructions = async () => {
+    setIsSavingInstructions(true)
+    
+    // Small delay to show button state change
+    await new Promise(resolve => setTimeout(resolve, 150))
+    
+    storageService.setChatInstructions(chatInstructions.trim())
+    setSavedChatInstructions(chatInstructions.trim())
+    
+    setIsSavingInstructions(false)
+    setShowSuccessInstructions(true)
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => {
+      setShowSuccessInstructions(false)
     }, 3000)
   }
 
@@ -467,16 +527,61 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               API Key
             </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your API key"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-            />
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your API key"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              />
+              {apiKey && (
+                <button
+                  onClick={() => setApiKey('')}
+                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 transition-colors"
+                  title="Clear API key"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Your API key is stored locally and never sent to our servers
             </p>
+          </div>
+          
+          {/* Save button for LLM Configuration */}
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleSaveLLM}
+              disabled={isSavingLLM || !hasUnsavedLLMChanges()}
+              className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                showSuccessLLM
+                  ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                  : hasUnsavedLLMChanges()
+                  ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
+                  : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+              }`}
+            >
+              {showSuccessLLM ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Saved</span>
+                </>
+              ) : isSavingLLM ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </button>
           </div>
           </div>
         )}
@@ -525,6 +630,40 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                 placeholder="Author name (optional)"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
+            </div>
+            
+            {/* Save button for Document Information */}
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleSaveDocument}
+                disabled={isSavingDocument || !hasUnsavedDocumentChanges() || !docTitle.trim()}
+                className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                  showSuccessDocument
+                    ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                    : hasUnsavedDocumentChanges() && docTitle.trim()
+                    ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
+                    : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                }`}
+              >
+                {showSuccessDocument ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Saved</span>
+                  </>
+                ) : isSavingDocument ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
             </div>
           </div>
           )}
@@ -702,48 +841,42 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               rows={12}
             />
           </div>
+          
+          {/* Save button for Chat Instructions */}
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleSaveInstructions}
+              disabled={isSavingInstructions || !hasUnsavedInstructionsChanges()}
+              className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                showSuccessInstructions
+                  ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                  : hasUnsavedInstructionsChanges()
+                  ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
+                  : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+              }`}
+            >
+              {showSuccessInstructions ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Saved</span>
+                </>
+              ) : isSavingInstructions ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </button>
+          </div>
           </div>
         )}
-      </div>
-
-      <div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving || (pdfId ? !docTitle.trim() : false)}
-          className={`px-4 py-2 text-white rounded transition-all duration-200 flex items-center gap-2 ${
-            showSuccess
-              ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
-              : hasUnsavedChanges()
-              ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
-              : 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
-          }`}
-        >
-          {showSuccess ? (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span>Saved</span>
-            </>
-          ) : isSaving ? (
-            <>
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Saving...</span>
-            </>
-          ) : hasUnsavedChanges() ? (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span>Save Settings (unsaved changes)</span>
-            </>
-          ) : (
-            <span>Save Settings</span>
-          )}
-        </button>
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">

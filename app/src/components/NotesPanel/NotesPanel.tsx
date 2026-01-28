@@ -147,6 +147,19 @@ export function NotesPanel({
     }
   }, [annotations.length, pdfId])
 
+  // Listen for switch to settings event from Chat component
+  useEffect(() => {
+    const handleSwitchToSettings = () => {
+      setActiveTab('settings')
+    }
+    
+    window.addEventListener('switchToSettings', handleSwitchToSettings)
+    
+    return () => {
+      window.removeEventListener('switchToSettings', handleSwitchToSettings)
+    }
+  }, [setActiveTab])
+
   const handleCreateSyncFile = () => {
     if (onExpandSyncFileSection) {
       onExpandSyncFileSection()

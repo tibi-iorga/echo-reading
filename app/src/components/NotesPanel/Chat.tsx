@@ -167,6 +167,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [includePageContext, setIncludePageContext] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!storageService.getApiKey())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -174,6 +175,36 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Check API key on mount and listen for changes
+  useEffect(() => {
+    const checkApiKey = () => {
+      setHasApiKey(!!storageService.getApiKey())
+    }
+    
+    // Check initially
+    checkApiKey()
+    
+    // Listen for storage changes (when API key is saved)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'llm_api_key') {
+        checkApiKey()
+      }
+    }
+    
+    // Listen for custom event when API key is saved (for same-tab updates)
+    const handleApiKeySaved = () => {
+      checkApiKey()
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('apiKeySaved', handleApiKeySaved)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('apiKeySaved', handleApiKeySaved)
+    }
+  }, [])
 
   // Auto-focus textarea when quoted text is set (user sent text to chat)
   useEffect(() => {
@@ -193,7 +224,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
 
     const apiKey = storageService.getApiKey()
     if (!apiKey) {
-      alert('Please configure your API key in Settings first.')
+      // This shouldn't happen if UI is properly disabled, but check anyway
       return
     }
 
@@ -347,7 +378,33 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       </div>
       {/* Messages area */}
       <div className="flex-1 overflow-auto pt-4">
-        {messages.length === 0 && (
+        {!hasApiKey && (
+          <div className="mx-4 mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
+                  API Key Required
+                </h3>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-2">
+                  Please configure your OpenAI API key in Settings to use the chat feature.
+                </p>
+                <button
+                  onClick={() => {
+                    // Dispatch event to switch to settings tab
+                    window.dispatchEvent(new CustomEvent('switchToSettings'))
+                  }}
+                  className="text-sm text-yellow-800 dark:text-yellow-200 font-medium hover:underline"
+                >
+                  Go to Settings →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {messages.length === 0 && hasApiKey && (
           <div className="text-center text-gray-500 dark:text-gray-400 py-8">
             <p className="text-sm">Explore the document deeper by asking questions,<br />or select text in the PDF to quote it and focus on specific passages.</p>
           </div>
@@ -426,14 +483,14 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder={hasApiKey ? "Type your message..." : "Configure API key in Settings to chat"}
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               rows={1}
-              disabled={isLoading}
+              disabled={isLoading || !hasApiKey}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || !hasApiKey}
               className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               Send
