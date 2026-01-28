@@ -5,6 +5,18 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-01-28
+
+### Added
+- Version display in settings panel
+
+### Fixed
+- Removed exposed debug logging endpoints and UUID from public repository
+
+### Security
+- Removed all debug logging calls that exposed UUID and localhost endpoint
+- Fixed security issue where debug endpoint UUID was publicly visible
+
 ## [0.1.0] - 2025-01-28
 
 ### Added
