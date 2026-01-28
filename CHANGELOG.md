@@ -5,6 +5,26 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-01-28
+
+### Changed
+- Replaced browser alert with inline error state in Chat component when API key is missing
+- Refactored Settings panel to use per-section save buttons with clear saved/unsaved states
+- Improved API key management UX with "Save Changes" button text for unsaved states
+
+### Added
+- Ability to clear/remove API key from Settings panel
+- Real-time API key status updates in Chat component
+- Inline error message in Chat when API key is not configured with link to Settings
+
+### Fixed
+- Chat input no longer allows typing when API key is not set (previously showed browser alert after typing)
+- Settings panel now shows only OpenAI as LLM provider option
+
+### Removed
+- Anthropic provider support (simplified to OpenAI only)
+- Browser alert popup for missing API key
+
 ## [0.1.1] - 2025-01-28
 
 ### Added
