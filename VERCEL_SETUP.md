@@ -15,7 +15,7 @@ After setting the root directory, Vercel will automatically:
 - Run `npm run build` in the `app` directory  
 - Use `app/dist` as the output directory
 
-Your `vercel.json` only needs the rewrites for SPA routing:
+Your `vercel.json` should be **inside the `app/` folder** (since that's your Root Directory) and only needs the rewrites for SPA routing:
 
 ```json
 {
@@ -27,6 +27,8 @@ Your `vercel.json` only needs the rewrites for SPA routing:
   ]
 }
 ```
+
+**Important**: When Root Directory is set to `app`, Vercel looks for `vercel.json` relative to that directory, so it must be at `app/vercel.json`, not at the repository root.
 
 ## Why This Is Required
 
