@@ -34,8 +34,8 @@ export function FileSelector({ onFileSelect }: FileSelectorProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Local First</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">All data stored locally. Your documents and annotations never leave your device.</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">No Server, No Cloud</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">All data stored locally. Your documents, annotations, and API key never leave your device.</p>
             </div>
           </div>
           
@@ -44,8 +44,8 @@ export function FileSelector({ onFileSelect }: FileSelectorProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Your API Key</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Use your own LLM API key. Full control over costs and providers.</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Your API Key, Your Control</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">We cannot see your key. It is stored on your device and sent directly to OpenAI when needed.</p>
             </div>
           </div>
           

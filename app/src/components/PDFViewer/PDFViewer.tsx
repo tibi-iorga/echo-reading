@@ -367,14 +367,6 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
     }
   }, [selectedText])
 
-  if (!pdf) {
-    return (
-      <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-900">
-        <p className="text-gray-500 dark:text-gray-400">No PDF loaded</p>
-      </div>
-    )
-  }
-
   // Measure navigation bar height
   useEffect(() => {
     if (navBarRef.current) {
@@ -383,14 +375,13 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
     }
   }, [])
 
-  // Measure container dimensions for debugging
-  useEffect(() => {
-    if (!containerRef.current) return
-    const scrollableContainer = containerRef.current.querySelector('.flex-1') as HTMLElement
-    const pageWrapper = document.getElementById(`pdf-page-wrapper-${pageNumber}`)
-    if (scrollableContainer && pageWrapper) {
-    }
-  }, [pageNumber, containerRef, isPageRendered])
+  if (!pdf) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-900">
+        <p className="text-gray-500 dark:text-gray-400">No PDF loaded</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 relative overflow-hidden" ref={containerRef}>

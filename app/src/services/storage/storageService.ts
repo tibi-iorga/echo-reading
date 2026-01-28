@@ -1,4 +1,13 @@
-const API_KEY_STORAGE_KEY = 'llm_api_key'
+import {
+  getApiKey as getSecureApiKey,
+  setApiKey as setSecureApiKey,
+  removeApiKey as removeSecureApiKey,
+  hasApiKey as hasSecureApiKey,
+  initializeSecureStorage,
+  isInFallbackMode,
+} from './secureKeyStorage'
+import type { Annotation } from '@/types'
+
 const PROVIDER_STORAGE_KEY = 'llm_provider'
 const ANNOTATIONS_STORAGE_KEY = 'pdf_annotations'
 const CHAT_INSTRUCTIONS_STORAGE_KEY = 'llm_chat_instructions'
@@ -18,12 +27,46 @@ const CURRENT_UI_STATE_VERSION = 1
 const CURRENT_GLOBAL_UI_STATE_VERSION = 1
 
 class StorageService {
-  getApiKey(): string | null {
-    return localStorage.getItem(API_KEY_STORAGE_KEY)
+  /**
+   * Initialize secure storage (must be called at app startup)
+   */
+  async initialize(): Promise<void> {
+    await initializeSecureStorage()
   }
 
-  setApiKey(apiKey: string): void {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey)
+  /**
+   * Check if running in fallback mode (in-memory only, key lost on reload)
+   */
+  isApiKeyInFallbackMode(): boolean {
+    return isInFallbackMode()
+  }
+
+  /**
+   * Get the stored API key (async - uses encrypted IndexedDB storage)
+   */
+  async getApiKey(): Promise<string | null> {
+    return getSecureApiKey()
+  }
+
+  /**
+   * Store an API key (async - uses encrypted IndexedDB storage)
+   */
+  async setApiKey(apiKey: string): Promise<void> {
+    await setSecureApiKey(apiKey)
+  }
+
+  /**
+   * Remove the stored API key
+   */
+  async removeApiKey(): Promise<void> {
+    await removeSecureApiKey()
+  }
+
+  /**
+   * Check if an API key is stored
+   */
+  async hasApiKey(): Promise<boolean> {
+    return hasSecureApiKey()
   }
 
   getProvider(): string | null {
@@ -34,7 +77,7 @@ class StorageService {
     localStorage.setItem(PROVIDER_STORAGE_KEY, provider)
   }
 
-  getAnnotations(pdfId: string): any[] {
+  getAnnotations(pdfId: string): Annotation[] {
     const stored = localStorage.getItem(`${ANNOTATIONS_STORAGE_KEY}_${pdfId}`)
     if (!stored) return []
     try {
@@ -44,7 +87,7 @@ class StorageService {
     }
   }
 
-  async saveAnnotations(pdfId: string, annotations: any[]): Promise<void> {
+  async saveAnnotations(pdfId: string, annotations: Annotation[]): Promise<void> {
     // Save to localStorage
     localStorage.setItem(
       `${ANNOTATIONS_STORAGE_KEY}_${pdfId}`,
@@ -304,8 +347,11 @@ class StorageService {
   }
 }
 
+// Chat message type for internal use
+type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }
+
 // Migration functions - upgrade old data structures to current version
-function migrateChatMessages(data: { version: number; messages?: any[] }): Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }> {
+function migrateChatMessages(data: { version: number; messages?: ChatMessage[] }): ChatMessage[] {
   if (data.version === CURRENT_CHAT_MESSAGES_VERSION) {
     return data.messages || []
   }

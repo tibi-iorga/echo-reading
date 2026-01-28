@@ -1,7 +1,47 @@
 import type { LLMProvider, LLMMessage } from '@/types'
+import { sanitizeErrorMessage } from './errorSanitizer'
+
+export interface TestConnectionResult {
+  success: boolean
+  message: string
+}
 
 export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
+
+  /**
+   * Test the API connection by calling the models endpoint
+   * This is free and confirms the key is valid
+   */
+  async testConnection(apiKey: string): Promise<TestConnectionResult> {
+    try {
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
+        const rawMessage = error.error?.message || 'Failed to connect to OpenAI'
+        return {
+          success: false,
+          message: sanitizeErrorMessage(rawMessage),
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Connected successfully',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: sanitizeErrorMessage(error instanceof Error ? error.message : 'Network error'),
+      }
+    }
+  }
 
   async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
@@ -47,7 +87,8 @@ export class OpenAIProvider implements LLMProvider {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new Error(error.error?.message || 'Failed to send message to OpenAI')
+      const rawMessage = error.error?.message || 'Failed to send message to OpenAI'
+      throw new Error(sanitizeErrorMessage(rawMessage))
     }
 
     const data = await response.json()
@@ -57,6 +98,47 @@ export class OpenAIProvider implements LLMProvider {
 
 export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
+
+  /**
+   * Test the API connection
+   * Anthropic does not have a simple models endpoint, so we use a minimal message
+   */
+  async testConnection(apiKey: string): Promise<TestConnectionResult> {
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'Hi' }],
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
+        const rawMessage = error.error?.message || 'Failed to connect to Anthropic'
+        return {
+          success: false,
+          message: sanitizeErrorMessage(rawMessage),
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Connected successfully',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: sanitizeErrorMessage(error instanceof Error ? error.message : 'Network error'),
+      }
+    }
+  }
 
   async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
@@ -79,7 +161,7 @@ export class AnthropicProvider implements LLMProvider {
       content: message,
     })
 
-    const body: any = {
+    const body: { model: string; max_tokens: number; messages: Array<{ role: string; content: string }>; system?: string } = {
       model: 'claude-3-opus-20240229',
       max_tokens: 1024,
       messages,
@@ -102,7 +184,8 @@ export class AnthropicProvider implements LLMProvider {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new Error(error.error?.message || 'Failed to send message to Anthropic')
+      const rawMessage = error.error?.message || 'Failed to send message to Anthropic'
+      throw new Error(sanitizeErrorMessage(rawMessage))
     }
 
     const data = await response.json()

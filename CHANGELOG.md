@@ -5,6 +5,21 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-01-28
+
+### Security
+- API keys are now encrypted at rest using Web Crypto AES-GCM in IndexedDB instead of plain localStorage
+- Error messages are sanitized to prevent accidental API key exposure in console output or UI
+- Added SECURITY.md documenting data handling and security model
+
+### Added
+- API connection testing to validate keys before saving
+- Automatic migration of existing API keys from localStorage to encrypted storage
+- Fallback mode for browsers without IndexedDB CryptoKey support (in-memory storage)
+
+### Fixed
+- Rules of hooks violation in PDFViewer component
+
 ## [0.1.2] - 2025-01-28
 
 ### Changed

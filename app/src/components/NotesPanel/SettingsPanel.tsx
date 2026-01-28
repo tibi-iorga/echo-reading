@@ -74,6 +74,14 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   const [isSourceFileExpanded, setIsSourceFileExpanded] = useState(true)
   const syncFileSectionRef = useRef<HTMLDivElement>(null)
   
+  // API key UI state
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [isInFallbackMode, setIsInFallbackMode] = useState(false)
+  
   // Expand sync file section when requested and scroll to it
   useEffect(() => {
     if (expandSyncFileSection) {
@@ -100,61 +108,65 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   const [savedDocAuthor, setSavedDocAuthor] = useState('')
 
   useEffect(() => {
-    const storedKey = storageService.getApiKey()
-    const storedProvider = storageService.getProvider()
-    const storedInstructions = storageService.getChatInstructions()
-    
-    if (storedKey) {
-      setApiKey(storedKey)
-      setSavedApiKey(storedKey)
-    }
-    
-    if (storedInstructions) {
-      setChatInstructions(storedInstructions)
-      setSavedChatInstructions(storedInstructions)
-    } else {
-      setChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
-      setSavedChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
-    }
-    
-    const providers = llmService.getAvailableProviders()
-    // Filter to only show OpenAI
-    const openAIProviders = providers.filter(p => p === 'OpenAI') as string[]
-    setAvailableProviders(openAIProviders)
-    
-    if (storedProvider && openAIProviders.includes(storedProvider)) {
-      setProvider(storedProvider)
-      setSavedProvider(storedProvider)
-      llmService.setProvider(storedProvider)
-    } else if (openAIProviders.length > 0) {
-      const defaultProvider = openAIProviders[0]
-      setProvider(defaultProvider)
-      setSavedProvider(defaultProvider)
-      llmService.setProvider(defaultProvider)
-    }
-
-    // Load document metadata if available
-    if (documentMetadata) {
-      setDocTitle(documentMetadata.title)
-      setDocAuthor(documentMetadata.author || '')
-      setSavedDocTitle(documentMetadata.title)
-      setSavedDocAuthor(documentMetadata.author || '')
-    } else if (pdfId) {
-      const stored = storageService.getDocumentMetadata(pdfId)
-      if (stored) {
-        setDocTitle(stored.title)
-        setDocAuthor(stored.author || '')
-        setSavedDocTitle(stored.title)
-        setSavedDocAuthor(stored.author || '')
+    const loadSettings = async () => {
+      // Load API key (now async)
+      const storedKey = await storageService.getApiKey()
+      const storedProvider = storageService.getProvider()
+      const storedInstructions = storageService.getChatInstructions()
+      
+      // Check fallback mode
+      setIsInFallbackMode(storageService.isApiKeyInFallbackMode())
+      
+      if (storedKey) {
+        setApiKey(storedKey)
+        setSavedApiKey(storedKey)
       }
-    }
+      
+      if (storedInstructions) {
+        setChatInstructions(storedInstructions)
+        setSavedChatInstructions(storedInstructions)
+      } else {
+        setChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
+        setSavedChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
+      }
+      
+      const providers = llmService.getAvailableProviders()
+      // Filter to only show OpenAI
+      const openAIProviders = providers.filter(p => p === 'OpenAI') as string[]
+      setAvailableProviders(openAIProviders)
+      
+      if (storedProvider && openAIProviders.includes(storedProvider)) {
+        setProvider(storedProvider)
+        setSavedProvider(storedProvider)
+        llmService.setProvider(storedProvider)
+      } else if (openAIProviders.length > 0) {
+        const defaultProvider = openAIProviders[0]
+        setProvider(defaultProvider)
+        setSavedProvider(defaultProvider)
+        llmService.setProvider(defaultProvider)
+      }
 
-    // Load sync file name and last updated time
-    const fileName = fileSyncService.getSyncFileName()
-    setSyncFileName(fileName)
-    
-    // Fetch last updated time if file exists
-    const updateLastModified = async () => {
+      // Load document metadata if available
+      if (documentMetadata) {
+        setDocTitle(documentMetadata.title)
+        setDocAuthor(documentMetadata.author || '')
+        setSavedDocTitle(documentMetadata.title)
+        setSavedDocAuthor(documentMetadata.author || '')
+      } else if (pdfId) {
+        const stored = storageService.getDocumentMetadata(pdfId)
+        if (stored) {
+          setDocTitle(stored.title)
+          setDocAuthor(stored.author || '')
+          setSavedDocTitle(stored.title)
+          setSavedDocAuthor(stored.author || '')
+        }
+      }
+
+      // Load sync file name and last updated time
+      const fileName = fileSyncService.getSyncFileName()
+      setSyncFileName(fileName)
+      
+      // Fetch last updated time if file exists
       if (fileName && fileSyncService.hasSyncFile()) {
         try {
           const time = await fileSyncService.getLastModifiedTime()
@@ -167,9 +179,21 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       }
     }
     
-    updateLastModified()
+    loadSettings()
     
     // Set up periodic refresh of last modified time (every 5 seconds)
+    const updateLastModified = async () => {
+      const fileName = fileSyncService.getSyncFileName()
+      if (fileName && fileSyncService.hasSyncFile()) {
+        try {
+          const time = await fileSyncService.getLastModifiedTime()
+          setLastUpdated(time)
+        } catch {
+          setLastUpdated(null)
+        }
+      }
+    }
+    
     const intervalId = setInterval(updateLastModified, 5000)
     
     return () => {
@@ -198,19 +222,20 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   // Save handlers for each section
   const handleSaveLLM = async () => {
     setIsSavingLLM(true)
+    setTestResult(null)
     
     // Small delay to show button state change
     await new Promise(resolve => setTimeout(resolve, 150))
     
-    const hadApiKeyBefore = !!storageService.getApiKey()
+    const hadApiKeyBefore = await storageService.hasApiKey()
     
     // Handle API key: save if provided, remove if empty
     if (apiKey.trim()) {
-      storageService.setApiKey(apiKey.trim())
+      await storageService.setApiKey(apiKey.trim())
       setSavedApiKey(apiKey.trim())
     } else {
       // Remove API key from storage if cleared
-      localStorage.removeItem('llm_api_key')
+      await storageService.removeApiKey()
       setSavedApiKey('')
     }
     
@@ -221,7 +246,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }
     
     // Dispatch event if API key status changed (added or removed)
-    const hasApiKeyAfter = !!storageService.getApiKey()
+    const hasApiKeyAfter = await storageService.hasApiKey()
     if (hadApiKeyBefore !== hasApiKeyAfter) {
       window.dispatchEvent(new CustomEvent('apiKeySaved'))
     }
@@ -233,6 +258,50 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     setTimeout(() => {
       setShowSuccessLLM(false)
     }, 3000)
+  }
+
+  const handleTestConnection = async () => {
+    if (!apiKey.trim()) {
+      setTestResult({ success: false, message: 'Please enter an API key first' })
+      return
+    }
+    
+    setIsTesting(true)
+    setTestResult(null)
+    
+    try {
+      const result = await llmService.testConnection(apiKey.trim())
+      setTestResult(result)
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Connection test failed' 
+      })
+    } finally {
+      setIsTesting(false)
+    }
+  }
+
+  const handleRemoveApiKey = async () => {
+    if (!showRemoveConfirm) {
+      setShowRemoveConfirm(true)
+      return
+    }
+    
+    setIsRemoving(true)
+    
+    try {
+      await storageService.removeApiKey()
+      setApiKey('')
+      setSavedApiKey('')
+      setTestResult(null)
+      setShowRemoveConfirm(false)
+      window.dispatchEvent(new CustomEvent('apiKeySaved'))
+    } catch (error) {
+      console.error('Failed to remove API key:', error)
+    } finally {
+      setIsRemoving(false)
+    }
   }
 
   const handleSaveDocument = async () => {
@@ -494,7 +563,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           onClick={() => setIsLLMConfigExpanded(!isLLMConfigExpanded)}
           className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">LLM Configuration</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Connect Your API Key</h2>
           <svg
             className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isLLMConfigExpanded ? 'rotate-180' : ''}`}
             fill="none"
@@ -507,6 +576,23 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         
         {isLLMConfigExpanded && (
           <div className="px-4 pb-4 space-y-4">
+          {/* Privacy explanation */}
+          <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Your API key stays on this device and is sent only to OpenAI when you ask a question. 
+              We have no server, so we never receive or store your key.
+            </p>
+          </div>
+          
+          {/* Fallback mode warning */}
+          {isInFallbackMode && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                Your browser does not support persistent secure storage. Your API key will only be kept for this session and will need to be re-entered after closing the browser.
+              </p>
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Provider
@@ -529,60 +615,168 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               API Key
             </label>
             <div className="flex gap-2">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your API key"
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              />
-              {apiKey && (
+              <div className="flex-1 relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => {
+                    setApiKey(e.target.value)
+                    setTestResult(null)
+                  }}
+                  placeholder="sk-..."
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                />
                 <button
-                  onClick={() => setApiKey('')}
-                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 transition-colors"
-                  title="Clear API key"
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title={showApiKey ? 'Hide API key' : 'Show API key'}
                 >
-                  Clear
+                  {showApiKey ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
                 </button>
-              )}
+              </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Your API key is stored locally and never sent to our servers
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 dark:text-blue-400 hover:underline"
+              >
+                Get your API key from OpenAI
+              </a>
             </p>
           </div>
           
-          {/* Save button for LLM Configuration */}
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={handleSaveLLM}
-              disabled={isSavingLLM || !hasUnsavedLLMChanges()}
-              className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
-                showSuccessLLM
-                  ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
-                  : hasUnsavedLLMChanges()
-                  ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
-                  : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-              }`}
-            >
-              {showSuccessLLM ? (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Test result feedback */}
+          {testResult && (
+            <div className={`p-3 rounded-lg ${
+              testResult.success 
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                {testResult.success ? (
+                  <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Saved</span>
-                </>
-              ) : isSavingLLM ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                ) : (
+                  <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>Save Changes</span>
-              )}
-            </button>
+                )}
+                <span className={`text-sm ${
+                  testResult.success 
+                    ? 'text-green-800 dark:text-green-200' 
+                    : 'text-red-800 dark:text-red-200'
+                }`}>
+                  {testResult.message}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Action buttons */}
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveLLM}
+                disabled={isSavingLLM || !hasUnsavedLLMChanges()}
+                className={`flex-1 px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                  showSuccessLLM
+                    ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                    : hasUnsavedLLMChanges()
+                    ? 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700'
+                    : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                }`}
+              >
+                {showSuccessLLM ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Saved</span>
+                  </>
+                ) : isSavingLLM ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Key</span>
+                )}
+              </button>
+              
+              <button
+                onClick={handleTestConnection}
+                disabled={isTesting || !apiKey.trim()}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isTesting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Testing...</span>
+                  </>
+                ) : (
+                  <span>Test Connection</span>
+                )}
+              </button>
+            </div>
+            
+            {/* Remove key button */}
+            {savedApiKey && (
+              <div>
+                {showRemoveConfirm ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleRemoveApiKey}
+                      disabled={isRemoving}
+                      className="flex-1 px-4 py-2 bg-red-500 dark:bg-red-600 text-white rounded hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isRemoving ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Removing...</span>
+                        </>
+                      ) : (
+                        <span>Confirm Remove</span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setShowRemoveConfirm(false)}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleRemoveApiKey}
+                    className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors"
+                  >
+                    Remove API Key
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           </div>
         )}

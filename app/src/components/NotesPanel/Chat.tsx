@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { llmService } from '@/services/llm/llmService'
 import { storageService } from '@/services/storage/storageService'
+import { sanitizeError } from '@/services/llm/errorSanitizer'
 import type { LLMMessage } from '@/types'
 import { renderMarkdown } from '@/utils/markdownRenderer'
 
@@ -167,7 +168,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [includePageContext, setIncludePageContext] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!storageService.getApiKey())
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -178,30 +179,22 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
 
   // Check API key on mount and listen for changes
   useEffect(() => {
-    const checkApiKey = () => {
-      setHasApiKey(!!storageService.getApiKey())
+    const checkApiKey = async () => {
+      const hasKey = await storageService.hasApiKey()
+      setHasApiKey(hasKey)
     }
     
     // Check initially
     checkApiKey()
-    
-    // Listen for storage changes (when API key is saved)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'llm_api_key') {
-        checkApiKey()
-      }
-    }
     
     // Listen for custom event when API key is saved (for same-tab updates)
     const handleApiKeySaved = () => {
       checkApiKey()
     }
     
-    window.addEventListener('storage', handleStorageChange)
     window.addEventListener('apiKeySaved', handleApiKeySaved)
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('apiKeySaved', handleApiKeySaved)
     }
   }, [])
@@ -222,7 +215,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     const userMessage = input.trim()
     if (!userMessage || isLoading) return
 
-    const apiKey = storageService.getApiKey()
+    const apiKey = await storageService.getApiKey()
     if (!apiKey) {
       // This shouldn't happen if UI is properly disabled, but check anyway
       return
@@ -337,11 +330,11 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
         content: response,
       }])
     } catch (error) {
-      // Add error message
+      // Add error message (sanitized to prevent API key leakage)
       setMessages([...newMessages, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
+        content: `Error: ${sanitizeError(error)}`,
       }])
     } finally {
       setIsLoading(false)
