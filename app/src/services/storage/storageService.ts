@@ -139,6 +139,13 @@ When users share text from their PDF:
 
 The user is actively reading and learning, so prioritize clarity and understanding over brevity.`
 
+    // If nothing is stored yet, initialize with the default so Chat always has system context.
+    // This makes first run behavior consistent between local dev and production.
+    if (instructions === null) {
+      localStorage.setItem(CHAT_INSTRUCTIONS_STORAGE_KEY, NEW_DEFAULT)
+      return NEW_DEFAULT
+    }
+
     if (instructions === OLD_DEFAULT) {
       localStorage.setItem(CHAT_INSTRUCTIONS_STORAGE_KEY, NEW_DEFAULT)
       return NEW_DEFAULT
