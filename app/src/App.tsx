@@ -35,6 +35,7 @@ function App() {
   const pageTextCache = useRef<Map<number, string>>(new Map())
   const [sidebarWidth, setSidebarWidth] = useState<number>(384)
   const sidebarWidthDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const [expandSyncFileSection, setExpandSyncFileSection] = useState<boolean>(false)
 
   const handleTextSelect = useCallback((text: string, pageNumber: number, _position: { x: number; y: number }) => {
     setSelectedText({ text, pageNumber })
@@ -122,6 +123,15 @@ function App() {
     // Switch to highlights tab to show the saved insight
     setActiveTab('notes')
   }, [addHighlight])
+
+  const handleExpandSyncFileSection = useCallback(() => {
+    setActiveTab('settings')
+    setExpandSyncFileSection(true)
+  }, [])
+
+  const handleSyncFileSectionExpanded = useCallback(() => {
+    setExpandSyncFileSection(false)
+  }, [])
 
   const handleExport = useCallback(() => {
     if (annotations.length === 0) {
@@ -802,6 +812,9 @@ function App() {
           onDocumentMetadataChange={handleMetadataChange}
           onSaveInsight={handleSaveInsight}
           onClearChat={handleClearChat}
+          onExpandSyncFileSection={handleExpandSyncFileSection}
+          expandSyncFileSection={expandSyncFileSection}
+          onSyncFileSectionExpanded={handleSyncFileSectionExpanded}
         />
       </div>
     </div>
