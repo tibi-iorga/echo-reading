@@ -23,6 +23,10 @@ See [app/README.md](app/README.md) for prerequisites, installation, and usage.
 - [CONTRIBUTING.md](CONTRIBUTING.md) – How to contribute
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) – Community standards
 
+## About this project
+
+This was a personal learning project on a real problem. It was 100% built by iterating with Cursor. No team, no company. Use it, fork it, and contribute as you like.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
