@@ -71,3 +71,7 @@ app/
 - Tailwind CSS for styling
 - react-pdf for PDF rendering
 - Local storage for data persistence
+
+## Contributing and conduct
+
+See the repository root for [CONTRIBUTING.md](../CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md).
