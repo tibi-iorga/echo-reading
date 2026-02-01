@@ -25,7 +25,7 @@ See [app/README.md](app/README.md) for prerequisites, installation, and usage.
 
 ## About this project
 
-This was a personal learning project on a real problem. It was 100% built by iterating with Cursor. No team, no company. Use it, fork it, and contribute as you like.
+A personal learning project on a real problem, built entirely by iterating with Cursor. By [Tibi Iorga](https://tibinotes.substack.com). No team, no company. Use it, fork it, and contribute as you like.
 
 ## License
 
