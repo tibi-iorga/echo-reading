@@ -48,6 +48,10 @@ The encrypted key storage requires IndexedDB and the Web Crypto API. These are s
 
 If your browser does not support storing cryptographic keys in IndexedDB (some older Safari versions), the application will fall back to in-memory storage. In this mode, your API key will not persist and you will need to re-enter it after closing the browser.
 
+## Code Security (Development)
+
+The repository uses [GitHub CodeQL](https://codeql.github.com/) for static application security testing (SAST). CodeQL runs on every push and pull request to the default branch and on a weekly schedule. Results appear under the repository **Security** tab (Code scanning alerts). This is free for public repositories.
+
 ## Questions or Concerns
 
 If you have security questions or want to report a vulnerability, please open an issue on the repository.
