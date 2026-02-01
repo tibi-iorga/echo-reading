@@ -2,6 +2,8 @@
 
 Echo is an AI reading companion that lets you open a PDF, read it, annotate it, and send content to an LLM without context switching.
 
+![Echo demo](assets/demo.gif)
+
 ## What it does
 
 - **PDF reader** with search, bookmarks, page navigation, and zoom
@@ -24,7 +26,7 @@ See [app/README.md](app/README.md) for prerequisites, installation, and usage.
 
 ## About this project
 
-A personal learning project on a real problem, built entirely by iterating with Cursor. By [Tibi Iorga](https://tibinotes.substack.com). No team, no company. Use it, fork it, and contribute as you like.
+A personal learning project built entirely by iterating with Cursor. By [Tibi Iorga](https://tibinotes.substack.com). No team, no company. Use it, fork it, and contribute as you like.
 
 ## License
 
