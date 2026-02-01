@@ -1104,6 +1104,14 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
           Echo v{VERSION}
+          {' · '}
+          <button
+            type="button"
+            onClick={() => window.open('https://github.com/tibi-iorga/echo-reading', '_blank', 'noopener,noreferrer')}
+            className="text-blue-500 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-0 p-0 font-inherit text-inherit"
+          >
+            GitHub
+          </button>
         </p>
       </div>
     </div>
