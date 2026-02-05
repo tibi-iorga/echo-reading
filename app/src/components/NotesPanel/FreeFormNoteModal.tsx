@@ -58,7 +58,7 @@ export function FreeFormNoteModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+    <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-50 flex items-center justify-center bg-black/50" style={{ minHeight: '100vh' }} onClick={onCancel}>
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}

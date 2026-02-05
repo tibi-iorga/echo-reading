@@ -3,7 +3,6 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import type { PDFDocument } from '@/types'
-import { PageNavigation } from './PageNavigation'
 import { SelectionActions } from './SelectionActions'
 import { HighlightOverlay } from './HighlightOverlay'
 import { HighlightNoteModal } from './HighlightNoteModal'
@@ -24,13 +23,12 @@ interface PDFViewerProps {
   onScaleChange?: (scale: number) => void
   onNumPagesChange?: (numPages: number) => void
   scale?: number
-  onBookmark?: (pageNumber: number) => void
-  isBookmarked?: boolean
   onPageDimensionsChange?: (dimensions: { width: number; height: number } | null) => void
   containerRef?: React.RefObject<HTMLDivElement>
+  onContainerDimensionsChange?: (dimensions: { width: number; height: number } | null) => void
 }
 
-export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, scale: externalScale, onBookmark, isBookmarked, onPageDimensionsChange, containerRef: externalContainerRef }: PDFViewerProps) {
+export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange: _onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, scale: externalScale, onPageDimensionsChange, containerRef: externalContainerRef, onContainerDimensionsChange }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [_internalScale, _setInternalScale] = useState<number>(1.0)
@@ -61,8 +59,7 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
   const [isPageRendered, setIsPageRendered] = useState<boolean>(false)
   const [preloadedPages, setPreloadedPages] = useState<Set<number>>(new Set())
   const renderedPagesRef = useRef<Set<number>>(new Set())
-  const navBarRef = useRef<HTMLDivElement>(null)
-  const [navBarHeight, setNavBarHeight] = useState<number>(0)
+  const scrollableContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (pdf) {
@@ -175,12 +172,13 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
     onNumPagesChange?.(numPages)
   }, [onNumPagesChange])
 
-  const goToPage = useCallback((page: number) => {
-    if (page >= 1 && page <= numPages) {
-      setPageNumber(page)
-      onPageChange?.(page)
-    }
-  }, [numPages, onPageChange, pageNumber])
+  // Reserved for future use
+  // const goToPage = useCallback((page: number) => {
+  //   if (page >= 1 && page <= numPages) {
+  //     setPageNumber(page)
+  //     onPageChange?.(page)
+  //   }
+  // }, [numPages, onPageChange, pageNumber])
 
   const handleTextSelection = useCallback(() => {
     const selection = window.getSelection()
@@ -367,13 +365,31 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
     }
   }, [selectedText])
 
-  // Measure navigation bar height
+  // Report scrollable container dimensions to parent
   useEffect(() => {
-    if (navBarRef.current) {
-      const height = navBarRef.current.getBoundingClientRect().height
-      setNavBarHeight(height)
+    if (!scrollableContainerRef.current || !onContainerDimensionsChange) return
+
+    const reportDimensions = () => {
+      if (scrollableContainerRef.current) {
+        const rect = scrollableContainerRef.current.getBoundingClientRect()
+        onContainerDimensionsChange({ width: rect.width, height: rect.height })
+      }
     }
-  }, [])
+
+    // Report initial dimensions
+    reportDimensions()
+
+    // Set up ResizeObserver to report dimension changes
+    const resizeObserver = new ResizeObserver(() => {
+      reportDimensions()
+    })
+
+    resizeObserver.observe(scrollableContainerRef.current)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [onContainerDimensionsChange])
 
   if (!pdf) {
     return (
@@ -385,9 +401,12 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 relative overflow-hidden" ref={containerRef}>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 relative min-h-0" style={{ display: 'flex', flexDirection: 'column' }} onMouseUp={handleTextSelection}>
-        <div style={{ height: '10px', flexShrink: 0 }} />
-        <div className="relative" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', flex: '1 1 auto', minHeight: 0, margin: 0, padding: 0 }}>
+      <div 
+        ref={scrollableContainerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden relative min-h-0" 
+        onMouseUp={handleTextSelection}
+      >
+        <div className="flex justify-center px-4">
           <Document
             file={pdf.url}
             onLoadSuccess={onDocumentLoadSuccess}
@@ -419,8 +438,10 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
                   // page.width and page.height are at current scale, so we need to divide by scale to get base dimensions
                   // Or use originalWidth/originalHeight if available
                   if (onPageDimensionsChange) {
-                    const baseWidth = (page as any).originalWidth ?? (page.width / scale)
-                    const baseHeight = (page as any).originalHeight ?? (page.height / scale)
+                    // Type assertion for react-pdf Page object which may have originalWidth/originalHeight
+                    const pageWithDimensions = page as typeof page & { originalWidth?: number; originalHeight?: number }
+                    const baseWidth = pageWithDimensions.originalWidth ?? (page.width / scale)
+                    const baseHeight = pageWithDimensions.originalHeight ?? (page.height / scale)
                     onPageDimensionsChange({ width: baseWidth, height: baseHeight })
                   }
                 }}
@@ -467,8 +488,6 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
             ))}
           </Document>
         </div>
-        <div style={{ height: `${10 + navBarHeight}px`, flexShrink: 0 }} />
-        
         {selectedText && (
           <SelectionActions
             selectedText={selectedText.text}
@@ -498,16 +517,6 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
         onSave={handleNoteSave}
         onCancel={handleNoteCancel}
       />
-
-      <div ref={navBarRef} className="absolute bottom-0 left-0 right-0 z-20 bg-white dark:bg-gray-900">
-        <PageNavigation
-          pageNumber={pageNumber}
-          numPages={numPages}
-          onPageChange={goToPage}
-          onBookmark={onBookmark}
-          isBookmarked={isBookmarked}
-        />
-      </div>
     </div>
   )
 }

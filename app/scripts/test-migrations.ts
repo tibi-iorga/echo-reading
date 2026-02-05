@@ -8,11 +8,13 @@
 // Import storage service (we'll need to adapt this for Node.js or run in browser)
 // For now, this is a template that shows the test structure
 
+type MigrationData = Record<string, unknown> | unknown[] | string | number | null
+
 interface TestCase {
   name: string
-  input: any
-  expectedOutput: any
-  migrationFn: (data: any) => any
+  input: MigrationData
+  expectedOutput: MigrationData
+  migrationFn: (data: MigrationData) => MigrationData
 }
 
 // Sample test data structures
@@ -30,9 +32,10 @@ const testCases: TestCase[] = [
       { id: '1', role: 'user', content: 'Hello', quotedText: null },
       { id: '2', role: 'assistant', content: 'Hi there' },
     ],
-    migrationFn: (data: any) => {
-      if (data.version === 1) {
-        return data.messages || []
+    migrationFn: (data: MigrationData) => {
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'version' in data && data.version === 1) {
+        const dataObj = data as { messages?: unknown[] }
+        return dataObj.messages || []
       }
       return []
     },
@@ -45,7 +48,7 @@ const testCases: TestCase[] = [
     expectedOutput: [
       { id: '1', role: 'user', content: 'Hello' },
     ],
-    migrationFn: (data: any) => {
+    migrationFn: (data: MigrationData) => {
       if (Array.isArray(data)) {
         return data
       }
@@ -63,9 +66,10 @@ const testCases: TestCase[] = [
       currentPage: 42,
       scale: 1.75,
     },
-    migrationFn: (data: any) => {
-      if (data.version === 1 && data.currentPage !== undefined && data.scale !== undefined) {
-        return { currentPage: data.currentPage, scale: data.scale }
+    migrationFn: (data: MigrationData) => {
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'version' in data && data.version === 1 && 'currentPage' in data && 'scale' in data) {
+        const dataObj = data as { currentPage: number; scale: number }
+        return { currentPage: dataObj.currentPage, scale: dataObj.scale }
       }
       return null
     },
@@ -80,9 +84,10 @@ const testCases: TestCase[] = [
       currentPage: 10,
       scale: 2.0,
     },
-    migrationFn: (data: any) => {
-      if (data.currentPage !== undefined && data.scale !== undefined) {
-        return { currentPage: data.currentPage, scale: data.scale }
+    migrationFn: (data: MigrationData) => {
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'currentPage' in data && 'scale' in data) {
+        const dataObj = data as { currentPage: number; scale: number }
+        return { currentPage: dataObj.currentPage, scale: dataObj.scale }
       }
       return null
     },
@@ -98,11 +103,14 @@ const testCases: TestCase[] = [
       activeTab: 'chat',
       isPanelCollapsed: false,
     },
-    migrationFn: (data: any) => {
-      if (data.version === 1 && data.activeTab && ['notes', 'chat', 'settings'].includes(data.activeTab)) {
-        return {
-          activeTab: data.activeTab as 'notes' | 'chat' | 'settings',
-          isPanelCollapsed: data.isPanelCollapsed ?? false,
+    migrationFn: (data: MigrationData) => {
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'version' in data && data.version === 1 && 'activeTab' in data) {
+        const dataObj = data as { activeTab: string; isPanelCollapsed?: boolean }
+        if (['notes', 'chat', 'settings'].includes(dataObj.activeTab)) {
+          return {
+            activeTab: dataObj.activeTab as 'notes' | 'chat' | 'settings',
+            isPanelCollapsed: dataObj.isPanelCollapsed ?? false,
+          }
         }
       }
       return null
@@ -115,24 +123,32 @@ const testCases: TestCase[] = [
       messages: [{ id: '1', role: 'user', content: 'Test' }],
     },
     expectedOutput: [],
-    migrationFn: (data: any) => {
-      if (data.version > 1) {
-        console.warn(`Version ${data.version} is newer than supported`)
-        return []
+    migrationFn: (data: MigrationData) => {
+      if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'version' in data) {
+        const dataObj = data as { version: number; messages?: unknown[] }
+        if (dataObj.version > 1) {
+          console.warn(`Version ${dataObj.version} is newer than supported`)
+          return []
+        }
+        return dataObj.messages || []
       }
-      return data.messages || []
+      return []
     },
   },
   {
     name: 'Chat Messages - Corrupted data',
     input: 'not valid json',
     expectedOutput: [],
-    migrationFn: (data: any) => {
+    migrationFn: (data: MigrationData) => {
       try {
         if (typeof data === 'string') {
           JSON.parse(data)
         }
-        return data.messages || []
+        if (typeof data === 'object' && data !== null && !Array.isArray(data) && 'messages' in data) {
+          const dataObj = data as { messages?: unknown[] }
+          return dataObj.messages || []
+        }
+        return []
       } catch {
         return []
       }

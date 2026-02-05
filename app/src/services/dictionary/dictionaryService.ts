@@ -44,15 +44,31 @@ class DictionaryService {
         throw new Error(`Dictionary API error: ${response.statusText}`)
       }
 
-      const data: any[] = await response.json()
+      interface DictionaryAPIEntry {
+        word?: string
+        phonetic?: string
+        phonetics?: Array<{ text?: string }>
+        meanings?: Array<{
+          partOfSpeech?: string
+          definitions?: Array<{
+            definition?: string
+            example?: string
+            synonyms?: string[]
+            antonyms?: string[]
+          }>
+        }>
+        sourceUrls?: string[]
+      }
+      
+      const data: DictionaryAPIEntry[] = await response.json()
       
       // Transform the API response to our DictionaryDefinition format
       return data.map((entry) => ({
         word: entry.word || wordOrPhrase,
         phonetic: entry.phonetic || entry.phonetics?.[0]?.text,
-        meanings: entry.meanings?.map((meaning: any) => ({
+        meanings: entry.meanings?.map((meaning) => ({
           partOfSpeech: meaning.partOfSpeech || '',
-          definitions: meaning.definitions?.map((def: any) => ({
+          definitions: meaning.definitions?.map((def) => ({
             definition: def.definition || '',
             example: def.example,
             synonyms: def.synonyms || [],

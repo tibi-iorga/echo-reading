@@ -44,3 +44,56 @@ VERSIONING_STRATEGY.md
 GITHUB_SETUP.md
 RELEASE_CHECKLIST.md
 GIT_WORKFLOW_PROMPT.md
+
+# Testing artifacts
+app/test-results/
+app/playwright-report/
+app/playwright/.cache/
+*.spec.ts.snap
+coverage/
+app/coverage/
+.nyc_output/
+
+# Test fixtures (may contain sensitive PDFs)
+app/tests/fixtures/*.pdf
+app/tests/fixtures/*.json
+!app/tests/fixtures/README.md
+
+# User-generated sync files (may contain sensitive data)
+*.notes.json
+*_notes.json
+*_sync.json
+
+# Browser storage dumps
+*.localstorage
+*.sessionstorage
+IndexedDB/
+
+# Secrets and credentials
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+secrets/
+credentials/
+*.secret
+
+# API keys and tokens (additional patterns)
+*api*key*.txt
+*api*key*.json
+*api*key*.env
+*token*.txt
+*token*.json
+
+# Backup files
+*.bak
+*.backup
+*~
+.#*
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache

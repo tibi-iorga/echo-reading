@@ -32,10 +32,11 @@ export function DocumentMetadataModal({
 
   const handleSave = () => {
     const trimmedTitle = title.trim()
-    if (!trimmedTitle) {
+    const trimmedAuthor = author.trim()
+    if (!trimmedTitle || !trimmedAuthor) {
       return
     }
-    onSave(trimmedTitle, author.trim() || null)
+    onSave(trimmedTitle, trimmedAuthor)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -50,12 +51,10 @@ export function DocumentMetadataModal({
 
   if (!isOpen) return null
 
-  const previewText = author
-    ? `[Document: "${title}" by ${author}, Page X of Y]`
-    : `[Document: "${title}", Page X of Y]`
+  const previewText = `[Document: "${title}" by ${author || 'Author'}, Page X of Y]`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onSkip}>
+    <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-50 flex items-center justify-center bg-black/50" style={{ minHeight: '100vh' }} onClick={onSkip}>
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -84,13 +83,13 @@ export function DocumentMetadataModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Author
+                Author <span className="text-red-500 dark:text-red-400">*</span>
               </label>
               <input
                 type="text"
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
-                placeholder="Author name (optional)"
+                placeholder="Author name"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -116,7 +115,7 @@ export function DocumentMetadataModal({
             </button>
             <button
               onClick={handleSave}
-              disabled={!title.trim()}
+              disabled={!title.trim() || !author.trim()}
               className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               Save

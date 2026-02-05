@@ -5,6 +5,8 @@ import { fileSyncService } from '@/services/fileSync/fileSyncService'
 import { importAnnotations, readFileAsText } from '@/utils/import'
 import { useTheme } from '@/contexts/ThemeContext'
 import { VERSION } from '@/constants/version'
+import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
+import { AlertModal } from '@/components/AlertModal/AlertModal'
 
 interface SettingsPanelProps {
   documentMetadata?: { title: string; author: string | null } | null
@@ -52,8 +54,6 @@ function formatRelativeTime(date: Date): string {
 export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfId, onReloadAnnotations, expandSyncFileSection, onSyncFileSectionExpanded }: SettingsPanelProps = {}) {
   const { theme, toggleTheme } = useTheme()
   const [apiKey, setApiKey] = useState('')
-  const [provider, setProvider] = useState('')
-  const [availableProviders, setAvailableProviders] = useState<string[]>([])
   const [chatInstructions, setChatInstructions] = useState('')
   const [docTitle, setDocTitle] = useState('')
   const [docAuthor, setDocAuthor] = useState('')
@@ -81,8 +81,14 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [showRemoveApiKeyConfirm, setShowRemoveApiKeyConfirm] = useState(false)
   const [isInFallbackMode, setIsInFallbackMode] = useState(false)
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; message: string; variant?: 'error' | 'warning' | 'info' | 'success' }>({
+    isOpen: false,
+    message: '',
+    variant: 'error',
+  })
   
   // Expand sync file section when requested and scroll to it
   useEffect(() => {
@@ -104,16 +110,28 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   
   // Track saved values to detect unsaved changes
   const [savedApiKey, setSavedApiKey] = useState('')
-  const [savedProvider, setSavedProvider] = useState('')
   const [savedChatInstructions, setSavedChatInstructions] = useState('')
   const [savedDocTitle, setSavedDocTitle] = useState('')
   const [savedDocAuthor, setSavedDocAuthor] = useState('')
+
+  // Use refs to track current values for the interval callback without causing re-renders
+  const docTitleRef = useRef(docTitle)
+  const docAuthorRef = useRef(docAuthor)
+  const savedDocTitleRef = useRef(savedDocTitle)
+  const savedDocAuthorRef = useRef(savedDocAuthor)
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    docTitleRef.current = docTitle
+    docAuthorRef.current = docAuthor
+    savedDocTitleRef.current = savedDocTitle
+    savedDocAuthorRef.current = savedDocAuthor
+  }, [docTitle, docAuthor, savedDocTitle, savedDocAuthor])
 
   useEffect(() => {
     const loadSettings = async () => {
       // Load API key (now async)
       const storedKey = await storageService.getApiKey()
-      const storedProvider = storageService.getProvider()
       const storedInstructions = storageService.getChatInstructions()
       
       // Check fallback mode
@@ -132,23 +150,10 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         setSavedChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
       }
       
-      const providers = llmService.getAvailableProviders()
-      // Filter to only show OpenAI
-      const openAIProviders = providers.filter(p => p === 'OpenAI') as string[]
-      setAvailableProviders(openAIProviders)
-      
-      if (storedProvider && openAIProviders.includes(storedProvider)) {
-        setProvider(storedProvider)
-        setSavedProvider(storedProvider)
-        llmService.setProvider(storedProvider)
-      } else if (openAIProviders.length > 0) {
-        const defaultProvider = openAIProviders[0]
-        setProvider(defaultProvider)
-        setSavedProvider(defaultProvider)
-        llmService.setProvider(defaultProvider)
-      }
+      // Always use OpenAI as the provider
+      llmService.setProvider('OpenAI')
 
-      // Load document metadata if available
+      // Load document metadata if available (only on initial load or pdfId change)
       if (documentMetadata) {
         setDocTitle(documentMetadata.title)
         setDocAuthor(documentMetadata.author || '')
@@ -168,11 +173,28 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       const fileName = fileSyncService.getSyncFileName()
       setSyncFileName(fileName)
       
-      // Fetch last updated time if file exists
+      // Fetch last updated time and metadata if file exists
       if (fileName && fileSyncService.hasSyncFile()) {
         try {
           const time = await fileSyncService.getLastModifiedTime()
           setLastUpdated(time)
+          
+          // Load metadata from sync file (on initial load, always update)
+          const syncData = await fileSyncService.readSyncData()
+          if (syncData.metadata) {
+            // Update document metadata from sync file if it exists
+            if (pdfId && onDocumentMetadataChange) {
+              onDocumentMetadataChange({
+                title: syncData.metadata.title,
+                author: syncData.metadata.author
+              })
+            }
+            // Also update local state
+            setDocTitle(syncData.metadata.title || '')
+            setDocAuthor(syncData.metadata.author || '')
+            setSavedDocTitle(syncData.metadata.title || '')
+            setSavedDocAuthor(syncData.metadata.author || '')
+          }
         } catch {
           setLastUpdated(null)
         }
@@ -182,14 +204,43 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }
     
     loadSettings()
-    
-    // Set up periodic refresh of last modified time (every 5 seconds)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfId]) // Only reload when pdfId changes, not when documentMetadata changes
+
+  // Separate effect for periodic refresh of last modified time (every 5 seconds)
+  useEffect(() => {
     const updateLastModified = async () => {
       const fileName = fileSyncService.getSyncFileName()
       if (fileName && fileSyncService.hasSyncFile()) {
         try {
           const time = await fileSyncService.getLastModifiedTime()
           setLastUpdated(time)
+          
+          // Only refresh metadata from sync file if there are no unsaved changes
+          const syncData = await fileSyncService.readSyncData()
+          if (syncData.metadata && pdfId) {
+            // Check if there are unsaved changes before updating (use refs to get current values)
+            const currentTitle = docTitleRef.current.trim()
+            const currentAuthor = (docAuthorRef.current.trim() || '')
+            const savedTitle = savedDocTitleRef.current.trim()
+            const savedAuthor = (savedDocAuthorRef.current || '')
+            const hasUnsaved = currentTitle !== savedTitle || currentAuthor !== savedAuthor
+            
+            if (!hasUnsaved) {
+              // Update document metadata from sync file if it exists
+              if (onDocumentMetadataChange) {
+                onDocumentMetadataChange({
+                  title: syncData.metadata.title,
+                  author: syncData.metadata.author
+                })
+              }
+              // Also update local state
+              setDocTitle(syncData.metadata.title || '')
+              setDocAuthor(syncData.metadata.author || '')
+              setSavedDocTitle(syncData.metadata.title || '')
+              setSavedDocAuthor(syncData.metadata.author || '')
+            }
+          }
         } catch {
           setLastUpdated(null)
         }
@@ -201,24 +252,24 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     return () => {
       clearInterval(intervalId)
     }
-  }, [documentMetadata, pdfId])
+  }, [pdfId, onDocumentMetadataChange]) // Only recreate interval when pdfId changes, not on every keystroke
 
   // Check unsaved changes per section
   const hasUnsavedLLMChanges = () => {
     const apiKeyChanged = apiKey.trim() !== savedApiKey
-    const providerChanged = provider !== savedProvider
-    return apiKeyChanged || providerChanged
+    return apiKeyChanged
+  }
+
+
+  const hasUnsavedInstructionsChanges = () => {
+    return chatInstructions.trim() !== savedChatInstructions
   }
 
   const hasUnsavedDocumentChanges = () => {
     if (!pdfId) return false
     const titleChanged = docTitle.trim() !== savedDocTitle
-    const authorChanged = (docAuthor.trim() || '') !== (savedDocAuthor || '')
+    const authorChanged = docAuthor.trim() !== savedDocAuthor
     return titleChanged || authorChanged
-  }
-
-  const hasUnsavedInstructionsChanges = () => {
-    return chatInstructions.trim() !== savedChatInstructions
   }
 
   // Save handlers for each section
@@ -241,11 +292,8 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       setSavedApiKey('')
     }
     
-    if (provider) {
-      storageService.setProvider(provider)
-      setSavedProvider(provider)
-      llmService.setProvider(provider)
-    }
+    // Always use OpenAI as the provider
+    llmService.setProvider('OpenAI')
     
     // Dispatch event if API key status changed (added or removed)
     const hasApiKeyAfter = await storageService.hasApiKey()
@@ -284,12 +332,12 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }
   }
 
-  const handleRemoveApiKey = async () => {
-    if (!showRemoveConfirm) {
-      setShowRemoveConfirm(true)
-      return
-    }
-    
+  const handleRemoveApiKey = () => {
+    setShowRemoveApiKeyConfirm(true)
+  }
+
+  const handleConfirmRemoveApiKey = async () => {
+    setShowRemoveApiKeyConfirm(false)
     setIsRemoving(true)
     
     try {
@@ -297,40 +345,19 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       setApiKey('')
       setSavedApiKey('')
       setTestResult(null)
-      setShowRemoveConfirm(false)
       window.dispatchEvent(new CustomEvent('apiKeySaved'))
     } catch (error) {
       console.error('Failed to remove API key:', error)
+      setAlertState({
+        isOpen: true,
+        message: 'Failed to remove API key',
+        variant: 'error',
+      })
     } finally {
       setIsRemoving(false)
     }
   }
 
-  const handleSaveDocument = async () => {
-    if (!pdfId || !docTitle.trim()) return
-    
-    setIsSavingDocument(true)
-    
-    // Small delay to show button state change
-    await new Promise(resolve => setTimeout(resolve, 150))
-    
-    const metadata = { title: docTitle.trim(), author: docAuthor.trim() || null }
-    storageService.setDocumentMetadata(pdfId, metadata)
-    setSavedDocTitle(docTitle.trim())
-    setSavedDocAuthor(docAuthor.trim() || '')
-    
-    if (onDocumentMetadataChange) {
-      onDocumentMetadataChange(metadata)
-    }
-    
-    setIsSavingDocument(false)
-    setShowSuccessDocument(true)
-    
-    // Hide success message after 3 seconds
-    setTimeout(() => {
-      setShowSuccessDocument(false)
-    }, 3000)
-  }
 
   const handleSaveInstructions = async () => {
     setIsSavingInstructions(true)
@@ -350,6 +377,45 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }, 3000)
   }
 
+  const handleSaveDocument = async () => {
+    if (!pdfId || !docTitle.trim() || !docAuthor.trim()) return
+    
+    setIsSavingDocument(true)
+    
+    // Small delay to show button state change
+    await new Promise(resolve => setTimeout(resolve, 150))
+    
+    const metadata = { title: docTitle.trim(), author: docAuthor.trim() }
+    storageService.setDocumentMetadata(pdfId, metadata)
+    setSavedDocTitle(docTitle.trim())
+    setSavedDocAuthor(docAuthor.trim() || '')
+    
+    // Also save to sync file if it exists
+    if (fileSyncService.hasSyncFile()) {
+      try {
+        const syncData = await fileSyncService.readSyncData()
+        await fileSyncService.writeSyncData({
+          ...syncData,
+          metadata
+        })
+      } catch (error) {
+        console.warn('Failed to save metadata to sync file:', error)
+      }
+    }
+    
+    if (onDocumentMetadataChange) {
+      onDocumentMetadataChange(metadata)
+    }
+    
+    setIsSavingDocument(false)
+    setShowSuccessDocument(true)
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => {
+      setShowSuccessDocument(false)
+    }, 3000)
+  }
+
   const handleChangeSourceFile = async () => {
     if (!pdfId) return
     
@@ -357,7 +423,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     
     try {
       if (!fileSyncService.isSupported()) {
-        alert('File System Access API is not supported in this browser.')
+        setAlertState({
+          isOpen: true,
+          message: 'File System Access API is not supported in this browser.',
+          variant: 'error',
+        })
         setIsChangingFile(false)
         return
       }
@@ -375,7 +445,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       const result = importAnnotations(content)
 
       if (!result.success) {
-        alert(result.error || 'Failed to import notes from the selected file')
+        setAlertState({
+          isOpen: true,
+          message: result.error || 'Failed to import notes from the selected file',
+          variant: 'error',
+        })
         setIsChangingFile(false)
         return
       }
@@ -387,7 +461,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       const lastModified = await fileSyncService.getLastModifiedTime()
       setLastUpdated(lastModified)
       
-      // Load page data from sync file (source of truth) and update localStorage
+      // Load page data and metadata from sync file (source of truth) and update localStorage
       // Use force=true to override localStorage (sync file takes precedence)
       try {
         const syncData = await fileSyncService.readSyncData()
@@ -398,6 +472,22 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         
         if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
           await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
+        }
+        
+        // Update metadata from sync file
+        if (syncData.metadata) {
+          // Update document metadata from sync file
+          if (onDocumentMetadataChange) {
+            onDocumentMetadataChange({
+              title: syncData.metadata.title,
+              author: syncData.metadata.author
+            })
+          }
+          // Also update local state
+          setDocTitle(syncData.metadata.title || '')
+          setDocAuthor(syncData.metadata.author || '')
+          setSavedDocTitle(syncData.metadata.title || '')
+          setSavedDocAuthor(syncData.metadata.author || '')
         }
       } catch (error) {
         console.warn('Failed to load page data from sync file:', error)
@@ -422,7 +512,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         window.dispatchEvent(new CustomEvent('syncFileChanged'))
       }, 100)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to change sync file')
+      setAlertState({
+        isOpen: true,
+        message: err instanceof Error ? err.message : 'Failed to change sync file',
+        variant: 'error',
+      })
     } finally {
       setIsChangingFile(false)
     }
@@ -435,7 +529,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     
     try {
       if (!fileSyncService.isSupported()) {
-        alert('File System Access API is not supported in this browser.')
+        setAlertState({
+          isOpen: true,
+          message: 'File System Access API is not supported in this browser.',
+          variant: 'error',
+        })
         setIsCreatingFile(false)
         return
       }
@@ -455,11 +553,18 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       await fileSyncService.setSyncFile(fileHandle, fileName)
       setSyncFileName(fileName)
       
-      // Get current annotations and page data from storage and write them to the new file
+      // Get current annotations, page data, and metadata from storage and write them to the new file
       const currentAnnotations = storageService.getAnnotations(pdfId)
       const furthestPage = storageService.getFurthestPage(pdfId)
       const lastPageRead = storageService.getLastPageRead(pdfId)
-      await fileSyncService.writeAnnotationsWithPages(currentAnnotations, furthestPage, lastPageRead)
+      const currentMetadata = documentMetadata || storageService.getDocumentMetadata(pdfId) || { title: '', author: null }
+      
+      await fileSyncService.writeSyncData({
+        annotations: currentAnnotations,
+        furthestPage,
+        lastPageRead,
+        metadata: currentMetadata
+      })
       
       // Update last modified time after writing
       const lastModified = await fileSyncService.getLastModifiedTime()
@@ -478,19 +583,25 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         }, 100)
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create file')
+      setAlertState({
+        isOpen: true,
+        message: err instanceof Error ? err.message : 'Failed to create file',
+        variant: 'error',
+      })
     } finally {
       setIsCreatingFile(false)
     }
   }
 
-  const handleDisconnectFile = async () => {
+  const handleDisconnectFile = () => {
+    if (!pdfId) return
+    setShowDisconnectConfirm(true)
+  }
+
+  const handleConfirmDisconnect = async () => {
     if (!pdfId) return
     
-    if (!confirm('Are you sure you want to disconnect the notes file? Your notes will still be saved locally, but they won\'t sync across browsers or devices.')) {
-      return
-    }
-    
+    setShowDisconnectConfirm(false)
     setIsDisconnecting(true)
     
     try {
@@ -498,11 +609,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       setSyncFileName(null)
       setLastUpdated(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to disconnect file')
+      setAlertState({
+        isOpen: true,
+        message: err instanceof Error ? err.message : 'Failed to disconnect file',
+        variant: 'error',
+      })
     } finally {
       setIsDisconnecting(false)
     }
   }
+
 
   return (
     <div className="space-y-6">
@@ -595,23 +711,6 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             </div>
           )}
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Provider
-            </label>
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              {availableProviders.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               API Key
@@ -743,40 +842,13 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             {/* Remove key button */}
             {savedApiKey && (
               <div>
-                {showRemoveConfirm ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleRemoveApiKey}
-                      disabled={isRemoving}
-                      className="flex-1 px-4 py-2 bg-red-500 dark:bg-red-600 text-white rounded hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                    >
-                      {isRemoving ? (
-                        <>
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Removing...</span>
-                        </>
-                      ) : (
-                        <span>Confirm Remove</span>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setShowRemoveConfirm(false)}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleRemoveApiKey}
-                    className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors"
-                  >
-                    Remove API Key
-                  </button>
-                )}
+                <button
+                  onClick={handleRemoveApiKey}
+                  disabled={isRemoving}
+                  className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRemoving ? 'Removing...' : 'Remove API Key'}
+                </button>
               </div>
             )}
           </div>
@@ -803,66 +875,66 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           
           {isDocumentInfoExpanded && (
             <div className="px-4 pb-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title <span className="text-red-500 dark:text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={docTitle}
-                onChange={(e) => setDocTitle(e.target.value)}
-                placeholder="Document title"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Title <span className="text-red-500 dark:text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
+                  placeholder="Document title"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Author
-              </label>
-              <input
-                type="text"
-                value={docAuthor}
-                onChange={(e) => setDocAuthor(e.target.value)}
-                placeholder="Author name (optional)"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Author <span className="text-red-500 dark:text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={docAuthor}
+                  onChange={(e) => setDocAuthor(e.target.value)}
+                  placeholder="Author name"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                />
+              </div>
+              
+              {/* Save button for Document Information */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleSaveDocument}
+                  disabled={isSavingDocument || !hasUnsavedDocumentChanges() || !docTitle.trim() || !docAuthor.trim()}
+                  className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                    showSuccessDocument
+                      ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                      : hasUnsavedDocumentChanges() && docTitle.trim() && docAuthor.trim()
+                      ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
+                      : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  {showSuccessDocument ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Saved</span>
+                    </>
+                  ) : isSavingDocument ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
             </div>
-            
-            {/* Save button for Document Information */}
-            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={handleSaveDocument}
-                disabled={isSavingDocument || !hasUnsavedDocumentChanges() || !docTitle.trim()}
-                className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
-                  showSuccessDocument
-                    ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
-                    : hasUnsavedDocumentChanges() && docTitle.trim()
-                    ? 'bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700'
-                    : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                }`}
-              >
-                {showSuccessDocument ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Saved</span>
-                  </>
-                ) : isSavingDocument ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>Save Changes</span>
-                )}
-              </button>
-            </div>
-          </div>
           )}
         </div>
       )}
@@ -895,28 +967,17 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                     ? 'The file where your notes are saved and synced'
                     : 'No sync file connected. Your notes are only saved locally in this browser.'}
                 </p>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                <div className="mb-2">
+                  <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 break-words break-all mb-2">
                     {syncFileName || 'No file selected'}
                   </div>
                   {syncFileName && (
                     <button
                       onClick={handleDisconnectFile}
                       disabled={isDisconnecting}
-                      className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Disconnect file"
-                      aria-label="Disconnect file"
+                      className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isDisconnecting ? (
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
+                      {isDisconnecting ? 'Disconnecting...' : 'Disconnect File'}
                     </button>
                   )}
                 </div>
@@ -1114,6 +1175,38 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           </button>
         </p>
       </div>
+
+      {/* Confirmation Modal for Disconnect */}
+      <ConfirmModal
+        isOpen={showDisconnectConfirm}
+        title="Disconnect Notes File"
+        message="Are you sure you want to disconnect the notes file? Your notes will still be saved locally, but they won't sync across browsers or devices."
+        confirmText="Disconnect"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDisconnect}
+        onCancel={() => setShowDisconnectConfirm(false)}
+        variant="danger"
+      />
+
+      {/* Confirmation Modal for Remove API Key */}
+      <ConfirmModal
+        isOpen={showRemoveApiKeyConfirm}
+        title="Remove API Key"
+        message="Are you sure you want to remove your API key? You will need to enter it again to use the AI chat features."
+        confirmText="Remove"
+        cancelText="Cancel"
+        onConfirm={handleConfirmRemoveApiKey}
+        onCancel={() => setShowRemoveApiKeyConfirm(false)}
+        variant="danger"
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        message={alertState.message}
+        variant={alertState.variant}
+        onClose={() => setAlertState({ isOpen: false, message: '', variant: 'error' })}
+      />
     </div>
   )
 }

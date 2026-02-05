@@ -3,7 +3,7 @@ import { usePDF } from '@/hooks/usePDF'
 import { useAnnotations } from '@/hooks/useAnnotations'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { PDFViewer } from '@/components/PDFViewer/PDFViewer'
-import { PDFControls } from '@/components/PDFViewer/PDFControls'
+import { PDFToolbar } from '@/components/PDFViewer/PDFToolbar'
 import { NotesPanel } from '@/components/NotesPanel/NotesPanel'
 import { FileSelector } from '@/components/FileSelector/FileSelector'
 import { OpenFileModal } from '@/components/OpenFileModal/OpenFileModal'
@@ -14,6 +14,8 @@ import { storageService } from '@/services/storage/storageService'
 import { fileSyncService } from '@/services/fileSync/fileSyncService'
 import { parseFilename } from '@/utils/filenameParser'
 import { extractPageText } from '@/utils/pdfTextExtractor'
+import { AlertModal } from '@/components/AlertModal/AlertModal'
+import type { Annotation } from '@/types'
 
 function App() {
   const { pdf, loadPDF, clearPDF } = usePDF()
@@ -36,6 +38,99 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(384)
   const sidebarWidthDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const [expandSyncFileSection, setExpandSyncFileSection] = useState<boolean>(false)
+  const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; message: string; variant?: 'error' | 'warning' | 'info' | 'success' }>({
+    isOpen: false,
+    message: '',
+    variant: 'warning',
+  })
+
+  // Calculate fit scale based on available container dimensions and PDF page dimensions
+  // Reserved for future use with handleFitPage
+  // const calculateFitScale = useCallback((
+  //   pdfPageWidth: number,
+  //   pdfPageHeight: number,
+  //   containerWidth: number,
+  //   containerHeight: number,
+  //   horizontalPadding: number = 32, // px-4 = 16px each side
+  //   verticalPadding: number = 8     // Minimal padding for top/bottom (4px each)
+  // ): number => {
+  //   const availableWidth = containerWidth - horizontalPadding
+  //   const availableHeight = containerHeight - verticalPadding
+  //   
+  //   // Calculate scale to fit width
+  //   const scaleToFitWidth = availableWidth / pdfPageWidth
+  //   // Calculate scale to fit height
+  //   const scaleToFitHeight = availableHeight / pdfPageHeight
+  //   
+  //   // Use the smaller scale to ensure PDF fits in both dimensions
+  //   const scale = Math.min(scaleToFitWidth, scaleToFitHeight)
+  //   
+  //   // Clamp between 0.5x and 3.0x
+  //   return Math.min(Math.max(scale, 0.5), 3.0)
+  // }, [])
+
+  // Calculate fit width scale
+  const calculateFitWidthScale = useCallback((
+    pdfPageWidth: number,
+    containerWidth: number,
+    horizontalPadding: number = 32
+  ): number => {
+    const availableWidth = containerWidth - horizontalPadding
+    const scale = availableWidth / pdfPageWidth
+    return Math.min(Math.max(scale, 0.5), 3.0)
+  }, [])
+
+  // Handle fit to viewport (fit page) - reserved for future use
+  // const handleFitPage = useCallback(() => {
+  //   if (!containerDimensions || !pageDimensions) {
+  //     setScale(1.0)
+  //     return
+  //   }
+  //   
+  //   const fitScale = calculateFitScale(
+  //     pageDimensions.width,
+  //     pageDimensions.height,
+  //     containerDimensions.width,
+  //     containerDimensions.height
+  //   )
+  //   setScale(fitScale)
+  // }, [pageDimensions, containerDimensions, calculateFitScale])
+
+  // Handle fit width
+  const handleFitWidth = useCallback(() => {
+    if (!containerDimensions || !pageDimensions) {
+      setScale(1.0)
+      return
+    }
+    
+    const fitScale = calculateFitWidthScale(
+      pageDimensions.width,
+      containerDimensions.width
+    )
+    setScale(fitScale)
+  }, [pageDimensions, containerDimensions, calculateFitWidthScale])
+
+  // Handle zoom in
+  const handleZoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev + 0.25, 3.0))
+  }, [])
+
+  // Handle zoom out
+  const handleZoomOut = useCallback(() => {
+    setScale(prev => Math.max(prev - 0.25, 0.25))
+  }, [])
+
+  // Handle page dimensions change from PDFViewer
+  const handlePageDimensionsChange = useCallback((dimensions: { width: number; height: number } | null) => {
+    setPageDimensions(dimensions)
+  }, [])
+
+  // Handle container dimensions change from PDFViewer
+  const handleContainerDimensionsChange = useCallback((dimensions: { width: number; height: number } | null) => {
+    setContainerDimensions(dimensions)
+  }, [])
 
   const handleTextSelect = useCallback((text: string, pageNumber: number, _position: { x: number; y: number }) => {
     setSelectedText({ text, pageNumber })
@@ -135,7 +230,11 @@ function App() {
 
   const handleExport = useCallback(() => {
     if (annotations.length === 0) {
-      alert('No annotations to export')
+      setAlertState({
+        isOpen: true,
+        message: 'No annotations to export',
+        variant: 'warning',
+      })
       return
     }
 
@@ -146,7 +245,7 @@ function App() {
 
   const handleOpenFileComplete = useCallback(async (
     metadata: { title: string; author: string | null },
-    importedAnnotations: any[],
+    importedAnnotations: Annotation[],
     fileHandle: FileSystemFileHandle | null,
     fileName: string | null
   ) => {
@@ -513,7 +612,7 @@ function App() {
         clearTimeout(uiStateDebounceRef.current)
       }
     }
-  }, [pdfId, currentPage, scale])
+  }, [pdfId, currentPage, scale, lastPageRead])
 
   // Save global UI state when it changes
   useEffect(() => {
@@ -554,6 +653,29 @@ function App() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [sidebarWidth, getMaxSidebarWidth])
+
+  // Track if this is the initial load (for auto-fit on first render)
+  const hasInitialFitRef = useRef<boolean>(false)
+
+  // Calculate initial fit scale when PDF and container dimensions become available (only on first load)
+  // Default to fit to width
+  useEffect(() => {
+    if (pageDimensions && containerDimensions && pdf && !hasInitialFitRef.current) {
+      // Use requestAnimationFrame to ensure layout is complete before calculating fit
+      const rafId = requestAnimationFrame(() => {
+        handleFitWidth()
+        hasInitialFitRef.current = true
+      })
+      return () => cancelAnimationFrame(rafId)
+    }
+  }, [pageDimensions, containerDimensions, pdf, handleFitWidth])
+
+  // Reset initial fit flag when PDF changes
+  useEffect(() => {
+    if (!pdf) {
+      hasInitialFitRef.current = false
+    }
+  }, [pdf])
 
   // Extract page text when page changes
   useEffect(() => {
@@ -621,11 +743,17 @@ function App() {
         }, 600)
       }
     },
-    onPreviousPage: () => {
+    onPreviousPage: async () => {
       if (currentPage > 1) {
+        const prevPage = currentPage - 1
         // Not manual forward navigation (going backward)
         isManualForwardNavigationRef.current = false
-        setCurrentPage(prev => prev - 1)
+        setCurrentPage(prevPage)
+        // Update last page read when navigating backward with arrow keys
+        if (pdfId) {
+          await storageService.saveLastPageRead(pdfId, prevPage)
+          setLastPageRead(prevPage)
+        }
       }
     },
     onCloseSelection: () => {
@@ -636,6 +764,71 @@ function App() {
     },
     enabled: !!pdf,
   })
+
+  // Handle page change with sync logic
+  const handleToolbarPageChange = useCallback(async (page: number) => {
+    // Page input is manual forward navigation if going forward
+    const isForward = page > currentPage
+    if (isForward) {
+      isManualForwardNavigationRef.current = true
+    } else {
+      isManualForwardNavigationRef.current = false
+    }
+    setCurrentPage(page)
+    // Update furthest page when navigating forward
+    // Check sync file first (source of truth) before updating
+    if (pdfId && isForward) {
+      let syncFileFurthestPage: number | null = null
+      try {
+        await fileSyncService.initialize()
+        if (fileSyncService.hasSyncFile()) {
+          const syncData = await fileSyncService.readSyncData()
+          syncFileFurthestPage = syncData.furthestPage ?? null
+        }
+      } catch (error) {
+        console.warn('Failed to check sync file for furthest page:', error)
+      }
+      
+      // Use sync file value as source of truth, fall back to localStorage
+      const currentFurthestPage = syncFileFurthestPage !== null ? syncFileFurthestPage : storageService.getFurthestPage(pdfId)
+      
+      // Only update if new page is greater than furthest page in sync file (or localStorage if no sync file)
+      if (currentFurthestPage === null || page > currentFurthestPage) {
+        await storageService.saveFurthestPage(pdfId, page)
+        setFurthestPage(page)
+      }
+      
+      // Update last page read immediately for manual forward navigation
+      await storageService.saveLastPageRead(pdfId, page)
+      setLastPageRead(page)
+    }
+    // Reset flag after a delay (longer than debounce to allow useEffect fallback)
+    setTimeout(() => {
+      isManualForwardNavigationRef.current = false
+    }, 600)
+  }, [currentPage, pdfId])
+
+  // Handle sync to last page read
+  const handleSyncLastPage = useCallback(() => {
+    isManualForwardNavigationRef.current = false
+    if (pdfId !== null) {
+      const savedLastPageRead = storageService.getLastPageRead(pdfId)
+      if (savedLastPageRead !== null) {
+        setCurrentPage(savedLastPageRead)
+      }
+    }
+  }, [pdfId])
+
+  // Handle sync to furthest page
+  const handleSyncFurthestPage = useCallback(() => {
+    isManualForwardNavigationRef.current = false
+    if (pdfId !== null) {
+      const savedFurthestPage = storageService.getFurthestPage(pdfId)
+      if (savedFurthestPage !== null) {
+        setCurrentPage(savedFurthestPage)
+      }
+    }
+  }, [pdfId])
 
   if (!pdf) {
     return <FileSelector onFileSelect={loadPDF} />
@@ -653,135 +846,56 @@ function App() {
           onCancel={handleOpenFileCancel}
         />
       )}
-      <div className="flex-1 flex flex-col">
-        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{pdf.file.name}</h1>
-          <div className="flex items-center gap-2">
-            <PDFControls
-              scale={scale}
-              onZoomIn={() => setScale(prev => Math.min(prev + 0.25, 3.0))}
-              onZoomOut={() => setScale(prev => Math.max(prev - 0.25, 0.5))}
-              onFit={() => setScale(1.5)}
-            />
-            <button
-              onClick={clearPDF}
-              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm text-gray-900 dark:text-white"
-            >
-              Close PDF
-            </button>
-            <button
-              onClick={() => {
-                // Not manual forward navigation (shortcut navigation)
-                isManualForwardNavigationRef.current = false
-                if (pdfId !== null) {
-                  const savedLastPageRead = storageService.getLastPageRead(pdfId)
-                  if (savedLastPageRead !== null) {
-                    setCurrentPage(savedLastPageRead)
-                  }
-                }
-              }}
-              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm flex items-center justify-center h-[28px] text-gray-900 dark:text-white"
-              title={lastPageRead !== null ? `Sync to last page read (page ${lastPageRead})` : "Sync to last page read"}
-            >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-              </svg>
-            </button>
-            <button
-              onClick={() => {
-                // Not manual forward navigation (shortcut navigation)
-                isManualForwardNavigationRef.current = false
-                if (pdfId !== null) {
-                  const savedFurthestPage = storageService.getFurthestPage(pdfId)
-                  if (savedFurthestPage !== null) {
-                    setCurrentPage(savedFurthestPage)
-                  }
-                }
-              }}
-              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm flex items-center justify-center h-[28px] text-gray-900 dark:text-white"
-              title={furthestPage !== null ? `Sync to furthest page (page ${furthestPage})` : "Sync to furthest page"}
-            >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
-              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm flex items-center justify-center h-[28px] text-gray-900 dark:text-white"
-              title={isPanelCollapsed ? "Expand panel" : "Collapse panel"}
-            >
-              {isPanelCollapsed ? (
-                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </button>
-          </div>
+      
+      {/* PDF Area (viewer + bottom toolbar) */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* PDF Content Area */}
+        <div className="flex-1 min-h-0">
+          <PDFViewer
+            pdf={pdf}
+            onTextSelect={handleTextSelect}
+            onHighlight={handleHighlight}
+            onSendToLLM={handleSendToLLM}
+            highlights={annotations.filter((a): a is Extract<typeof a, { type: 'highlight' }> => a.type === 'highlight')}
+            onNavigateToPage={handleNavigateToPage}
+            currentPage={currentPage}
+            onPageChange={handleToolbarPageChange}
+            onPageDimensionsChange={handlePageDimensionsChange}
+            onContainerDimensionsChange={handleContainerDimensionsChange}
+            onNumPagesChange={setNumPages}
+            scale={scale}
+            onScaleChange={setScale}
+          />
         </div>
-        <PDFViewer
-          pdf={pdf}
-          onTextSelect={handleTextSelect}
-          onHighlight={handleHighlight}
-          onSendToLLM={handleSendToLLM}
-          highlights={annotations.filter((a): a is Extract<typeof a, { type: 'highlight' }> => a.type === 'highlight')}
-          onNavigateToPage={handleNavigateToPage}
-          currentPage={currentPage}
-          onPageChange={async (page) => {
-            // Page input is manual forward navigation if going forward
-            const isForward = page > currentPage
-            if (isForward) {
-              isManualForwardNavigationRef.current = true
-            } else {
-              isManualForwardNavigationRef.current = false
-            }
-            setCurrentPage(page)
-            // Update furthest page when navigating forward
-            // Check sync file first (source of truth) before updating
-            if (pdfId && isForward) {
-              let syncFileFurthestPage: number | null = null
-              try {
-                await fileSyncService.initialize()
-                if (fileSyncService.hasSyncFile()) {
-                  const syncData = await fileSyncService.readSyncData()
-                  syncFileFurthestPage = syncData.furthestPage ?? null
-                }
-              } catch (error) {
-                console.warn('Failed to check sync file for furthest page:', error)
-              }
-              
-              // Use sync file value as source of truth, fall back to localStorage
-              const currentFurthestPage = syncFileFurthestPage !== null ? syncFileFurthestPage : storageService.getFurthestPage(pdfId)
-              
-              // Only update if new page is greater than furthest page in sync file (or localStorage if no sync file)
-              if (currentFurthestPage === null || page > currentFurthestPage) {
-                await storageService.saveFurthestPage(pdfId, page)
-                setFurthestPage(page)
-              }
-              
-              // Update last page read immediately for manual forward navigation
-              await storageService.saveLastPageRead(pdfId, page)
-              setLastPageRead(page)
-            }
-            // Reset flag after a delay (longer than debounce to allow useEffect fallback)
-            setTimeout(() => {
-              isManualForwardNavigationRef.current = false
-            }, 600)
-          }}
-          onNumPagesChange={setNumPages}
-          scale={scale}
-          onScaleChange={setScale}
-          onBookmark={addBookmark}
+        
+        {/* Bottom Toolbar - only spans PDF area width */}
+        <PDFToolbar
+          onClose={clearPDF}
+          pdfFileName={pdf.file.name}
+          pageNumber={currentPage}
+          numPages={numPages}
+          onPageChange={handleToolbarPageChange}
+          onBookmark={() => addBookmark(currentPage)}
           isBookmarked={annotations.some((a) => a.type === 'bookmark' && a.pageNumber === currentPage)}
+          scale={scale}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onFitWidth={handleFitWidth}
+          onSyncLastPage={handleSyncLastPage}
+          onSyncFurthestPage={handleSyncFurthestPage}
+          lastPageRead={lastPageRead}
+          furthestPage={furthestPage}
+          hasUnsavedChanges={annotations.length > 0}
         />
       </div>
       
+      {/* Notes Panel - full height */}
       <div 
-        className={`flex-shrink-0 border-l border-gray-200 relative ${isPanelCollapsed ? 'hidden' : ''}`}
-        style={{ width: `${sidebarWidth}px`, transition: 'width 0.2s ease-out' }}
+        className="flex-shrink-0 relative h-full bg-white dark:bg-gray-900"
+        style={{ 
+          width: isPanelCollapsed ? '48px' : `${sidebarWidth}px`, 
+          transition: 'width 0.2s ease-out' 
+        }}
       >
         {!isPanelCollapsed && (
           <ResizeHandle 
@@ -815,8 +929,18 @@ function App() {
           onExpandSyncFileSection={handleExpandSyncFileSection}
           expandSyncFileSection={expandSyncFileSection}
           onSyncFileSectionExpanded={handleSyncFileSectionExpanded}
+          isCollapsed={isPanelCollapsed}
+          onToggleCollapsed={() => setIsPanelCollapsed(!isPanelCollapsed)}
         />
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        message={alertState.message}
+        variant={alertState.variant}
+        onClose={() => setAlertState({ isOpen: false, message: '', variant: 'warning' })}
+      />
     </div>
   )
 }

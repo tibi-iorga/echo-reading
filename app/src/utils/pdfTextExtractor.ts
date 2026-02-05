@@ -23,7 +23,13 @@ export async function extractPageText(pdfUrl: string, pageNumber: number, maxLen
     
     // Combine all text items into a single string
     let text = textContent.items
-      .map((item: any) => item.str)
+      .map((item) => {
+        // TextItem has 'str' property, TextMarkedContent does not
+        if ('str' in item && typeof item.str === 'string') {
+          return item.str
+        }
+        return ''
+      })
       .join(' ')
       .trim()
     

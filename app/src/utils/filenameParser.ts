@@ -15,7 +15,7 @@ export interface ParsedDocumentInfo {
  */
 export function parseFilename(filename: string): ParsedDocumentInfo {
   // Remove .pdf extension
-  let cleanName = filename.replace(/\.pdf$/i, '').trim()
+  const cleanName = filename.replace(/\.pdf$/i, '').trim()
   
   if (!cleanName) {
     return { title: filename, author: null }

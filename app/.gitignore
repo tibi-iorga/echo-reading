@@ -22,3 +22,61 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Testing artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+*.spec.ts.snap
+coverage/
+.nyc_output/
+
+# Test fixtures (may contain sensitive PDFs)
+tests/fixtures/*.pdf
+tests/fixtures/*.json
+!tests/fixtures/README.md
+
+# User-generated sync files (may contain sensitive data)
+*.notes.json
+*_notes.json
+*_sync.json
+
+# Browser storage dumps
+*.localstorage
+*.sessionstorage
+IndexedDB/
+
+# Secrets and credentials
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+secrets/
+credentials/
+*.secret
+
+# API keys and tokens
+*api*key*.txt
+*api*key*.json
+*api*key*.env
+*token*.txt
+*token*.json
+
+# Environment files (additional patterns)
+.env.*
+!.env.example
+!.env.template
+
+# Backup files
+*.bak
+*.backup
+*~
+.#*
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.vite/

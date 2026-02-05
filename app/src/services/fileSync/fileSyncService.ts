@@ -263,7 +263,14 @@ class FileSyncService {
         throw new Error('File System Access API not supported')
       }
 
-      const [fileHandle] = await (window as any).showOpenFilePicker({
+      interface FileSystemWindow extends Window {
+        showOpenFilePicker?: (options?: {
+          types?: Array<{ description?: string; accept?: Record<string, string[]> }>
+          multiple?: boolean
+        }) => Promise<FileSystemFileHandle[]>
+      }
+      
+      const [fileHandle] = await (window as FileSystemWindow).showOpenFilePicker!({
         types: [{
           description: 'Notes files',
           accept: {
@@ -276,7 +283,7 @@ class FileSyncService {
 
       return fileHandle
     } catch (error) {
-      if ((error as any).name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         // User cancelled
         return null
       }
@@ -294,7 +301,14 @@ class FileSyncService {
         throw new Error('File System Access API not supported')
       }
 
-      const fileHandle = await (window as any).showSaveFilePicker({
+      interface FileSystemWindow extends Window {
+        showSaveFilePicker?: (options?: {
+          suggestedName?: string
+          types?: Array<{ description?: string; accept?: Record<string, string[]> }>
+        }) => Promise<FileSystemFileHandle>
+      }
+      
+      const fileHandle = await (window as FileSystemWindow).showSaveFilePicker!({
         suggestedName: fileName,
         types: [{
           description: 'JSON files',
@@ -311,7 +325,7 @@ class FileSyncService {
 
       return fileHandle
     } catch (error) {
-      if ((error as any).name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         // User cancelled
         return null
       }

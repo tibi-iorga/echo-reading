@@ -1,0 +1,16 @@
+# Mark sensitive files as generated to prevent accidental commits
+# These files should be in .gitignore, but this provides an extra layer
+
+# Test fixtures should not be committed (may contain sensitive PDFs)
+tests/fixtures/*.pdf linguist-generated=true
+tests/fixtures/*.json linguist-generated=true
+
+# User sync files should not be committed (may contain sensitive data)
+*.notes.json linguist-generated=true
+*_notes.json linguist-generated=true
+*_sync.json linguist-generated=true
+
+# Test results and reports
+test-results/** linguist-generated=true
+playwright-report/** linguist-generated=true
+coverage/** linguist-generated=true

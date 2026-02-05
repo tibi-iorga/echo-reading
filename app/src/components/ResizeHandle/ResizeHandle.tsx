@@ -72,7 +72,7 @@ export function ResizeHandle({ onResize, minWidth = 250, maxWidth = 800 }: Resiz
       style={{ marginLeft: '-2px' }}
       title="Drag to resize sidebar"
     >
-      <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-300 group-hover:bg-blue-500 transition-colors" />
+      <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-transparent group-hover:bg-blue-500 transition-colors" />
     </div>
   )
 }

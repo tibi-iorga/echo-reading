@@ -161,6 +161,22 @@ function AssistantMessage({ content, onSaveInsight }: AssistantMessageProps) {
   )
 }
 
+interface PresetCommand {
+  name: string
+  text: string
+  description: string
+}
+
+const PRESET_COMMANDS: PresetCommand[] = [
+  { name: 'explain', text: 'Explain this in simpler terms', description: 'Explain in simpler terms' },
+  { name: 'expand', text: 'Expand on this concept', description: 'Expand on this concept' },
+  { name: 'summarize', text: 'Summarize the key points', description: 'Summarize the key points' },
+  { name: 'examples', text: 'Give examples of this', description: 'Give examples of this' },
+  { name: 'compare', text: 'Compare this to', description: 'Compare this to...' },
+  { name: 'why', text: 'Why is this important?', description: 'Why is this important?' },
+  { name: 'how', text: 'How does this work?', description: 'How does this work?' },
+]
+
 export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages, onMessagesChange, documentMetadata, currentPage, currentPageText, onSaveInsight, onClearChat }: ChatProps = {}) {
   const [internalMessages, setInternalMessages] = useState<Message[]>([])
   const messages = externalMessages ?? internalMessages
@@ -171,6 +187,11 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
   const [hasApiKey, setHasApiKey] = useState<boolean>(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showCommands, setShowCommands] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const commandsDropdownRef = useRef<HTMLDivElement>(null)
+  const [isInputFocused, setIsInputFocused] = useState(false)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -210,6 +231,43 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       })
     }
   }, [quotedText])
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto'
+      const scrollHeight = textarea.scrollHeight
+      const maxHeight = 200
+      const newHeight = Math.min(scrollHeight, maxHeight)
+      textarea.style.height = `${newHeight}px`
+      // Only show scrollbar if content exceeds max height
+      textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden'
+    }
+  }, [input])
+
+  // Close commands dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        commandsDropdownRef.current &&
+        !commandsDropdownRef.current.contains(event.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(event.target as Node)
+      ) {
+        setShowCommands(false)
+        setCommandQuery('')
+      }
+    }
+
+    if (showCommands) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showCommands])
 
   const handleSend = async () => {
     const userMessage = input.trim()
@@ -350,19 +408,117 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  // Filter commands based on query
+  const filteredCommands = commandQuery
+    ? PRESET_COMMANDS.filter(cmd => cmd.name.toLowerCase().startsWith(commandQuery.toLowerCase()))
+    : PRESET_COMMANDS
+
+  // Handle input change and detect slash commands
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInput(value)
+
+    // Check if user is typing a slash command
+    const cursorPosition = e.target.selectionStart
+    const textBeforeCursor = value.substring(0, cursorPosition)
+    const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+    
+    // Show commands if there's a slash and it's at the start or after whitespace/newline
+    if (lastSlashIndex !== -1) {
+      const textAfterSlash = textBeforeCursor.substring(lastSlashIndex + 1)
+      // Only show if slash is at start or preceded by whitespace/newline, and no space after slash
+      const beforeSlash = textBeforeCursor.substring(0, lastSlashIndex)
+      const isAtStart = lastSlashIndex === 0
+      const isAfterWhitespace = beforeSlash.length === 0 || /[\s\n]/.test(beforeSlash[beforeSlash.length - 1])
+      const hasNoSpaceAfterSlash = !/\s/.test(textAfterSlash)
+      
+      if ((isAtStart || isAfterWhitespace) && hasNoSpaceAfterSlash) {
+        setCommandQuery(textAfterSlash)
+        setShowCommands(true)
+        setSelectedCommandIndex(0)
+        return
+      }
+    }
+    
+    // Hide commands if conditions aren't met
+    setShowCommands(false)
+    setCommandQuery('')
+  }
+
+  // Handle keyboard navigation in commands dropdown
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showCommands && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedCommandIndex(prev => (prev + 1) % filteredCommands.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedCommandIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const selectedCommand = filteredCommands[selectedCommandIndex]
+        if (selectedCommand) {
+          insertCommand(selectedCommand.text)
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowCommands(false)
+        setCommandQuery('')
+        return
+      }
+    }
+    
+    // Normal Enter key handling
+    if (e.key === 'Enter' && !e.shiftKey && !showCommands) {
       e.preventDefault()
       handleSend()
     }
   }
 
+  // Insert command text into input
+  const insertCommand = (commandText: string) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const cursorPosition = textarea.selectionStart
+    const textBeforeCursor = input.substring(0, cursorPosition)
+    const textAfterCursor = input.substring(cursorPosition)
+    
+    // Find the last slash position
+    const lastSlashIndex = textBeforeCursor.lastIndexOf('/')
+    if (lastSlashIndex === -1) return
+
+    // Replace from slash to cursor with command text
+    const beforeSlash = input.substring(0, lastSlashIndex)
+    const newInput = beforeSlash + commandText + ' ' + textAfterCursor
+    
+    setInput(newInput)
+    setShowCommands(false)
+    setCommandQuery('')
+    
+    // Set cursor position after inserted text
+    setTimeout(() => {
+      const newCursorPosition = beforeSlash.length + commandText.length + 1
+      textarea.setSelectionRange(newCursorPosition, newCursorPosition)
+      textarea.focus()
+    }, 0)
+  }
+
+  const handleKeyPress = (_e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // This is now handled in handleKeyDown
+  }
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chat</h2>
-        {messages.length > 0 && onClearChat && (
+      {/* Header - only show if there are messages and clear button is available */}
+      {messages.length > 0 && onClearChat && (
+        <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={onClearChat}
             className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
@@ -370,8 +526,8 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
           >
             Clear chat
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {/* Messages area */}
       <div className="flex-1 overflow-auto pt-4">
         {!hasApiKey && (
@@ -473,17 +629,42 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={hasApiKey ? "Type your message..." : "Configure API key in Settings to chat"}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              rows={1}
-              disabled={isLoading || !hasApiKey}
-            />
+          <div className="flex gap-2 relative">
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onKeyPress={handleKeyPress}
+                placeholder={hasApiKey ? (isInputFocused ? "Type / for quick actions" : "Ask anything") : "Configure API key in Settings to chat"}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+                className="flex-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                rows={1}
+                disabled={isLoading || !hasApiKey}
+              />
+              {showCommands && filteredCommands.length > 0 && (
+                <div
+                  ref={commandsDropdownRef}
+                  className="absolute bottom-full left-0 right-0 mb-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto"
+                >
+                  {filteredCommands.map((cmd, index) => (
+                    <button
+                      key={cmd.name}
+                      type="button"
+                      onClick={() => insertCommand(cmd.text)}
+                      className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 ${
+                        index === selectedCommandIndex ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                      }`}
+                    >
+                      <span className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{cmd.name}</span>
+                      <span className="text-gray-500 dark:text-gray-400 text-sm leading-tight">• {cmd.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading || !hasApiKey}

@@ -3,7 +3,7 @@ import { importAnnotations, readFileAsText } from '@/utils/import'
 import { fileSyncService } from '@/services/fileSync/fileSyncService'
 import type { Annotation } from '@/types'
 
-type Step = 'fileInfo' | 'notesSync' | 'skipWarning'
+type Step = 'notesSync' | 'fileInfo' | 'skipWarning'
 
 interface OpenFileModalProps {
   isOpen: boolean
@@ -22,7 +22,7 @@ export function OpenFileModal({
   onComplete,
   onCancel,
 }: OpenFileModalProps) {
-  const [step, setStep] = useState<Step>('fileInfo')
+  const [step, setStep] = useState<Step>('notesSync')
   const [title, setTitle] = useState(initialTitle)
   const [author, setAuthor] = useState(initialAuthor || '')
   const [isLoading, setIsLoading] = useState(false)
@@ -34,27 +34,36 @@ export function OpenFileModal({
 
   useEffect(() => {
     if (isOpen) {
-      setStep('fileInfo')
+      setStep('notesSync')
       setTitle(initialTitle)
       setAuthor(initialAuthor || '')
       setError(null)
       setSelectedFileHandle(null)
       setSelectedFileName(null)
       setImportedAnnotations([])
-      setTimeout(() => {
-        titleInputRef.current?.focus()
-      }, 100)
     }
   }, [isOpen, initialTitle, initialAuthor])
 
   const handleFileInfoContinue = () => {
     const trimmedTitle = title.trim()
+    const trimmedAuthor = author.trim()
     if (!trimmedTitle) {
       setError('Title is required')
       return
     }
+    if (!trimmedAuthor) {
+      setError('Author is required')
+      return
+    }
     setError(null)
-    setStep('notesSync')
+    
+    // If no sync file was selected, show skip warning
+    // Otherwise, finish with sync file
+    if (!selectedFileHandle) {
+      setStep('skipWarning')
+    } else {
+      handleFinish()
+    }
   }
 
   const handleSelectExistingFile = async () => {
@@ -77,6 +86,19 @@ export function OpenFileModal({
 
       const file = await fileHandle.getFile()
       const content = await readFileAsText(file)
+      
+      // Try to parse as sync file format first (with metadata)
+      let metadataFromFile: { title?: string; author?: string | null } | null = null
+      try {
+        const parsed = JSON.parse(content)
+        if (parsed.metadata && typeof parsed.metadata === 'object') {
+          metadataFromFile = parsed.metadata
+        }
+      } catch {
+        // Not JSON or doesn't have metadata, continue with importAnnotations
+      }
+
+      // Import annotations from file content
       const result = importAnnotations(content)
 
       if (!result.success) {
@@ -88,7 +110,21 @@ export function OpenFileModal({
       setSelectedFileHandle(fileHandle)
       setSelectedFileName(file.name)
       setImportedAnnotations(result.annotations)
+
+      // Pre-fill title and author from sync file metadata if available
+      if (metadataFromFile?.title) {
+        setTitle(metadataFromFile.title)
+      }
+      if (metadataFromFile?.author) {
+        setAuthor(metadataFromFile.author)
+      }
+
+      // Move to file info step to allow editing
       setIsLoading(false)
+      setStep('fileInfo')
+      setTimeout(() => {
+        titleInputRef.current?.focus()
+      }, 100)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select file')
       setIsLoading(false)
@@ -119,17 +155,51 @@ export function OpenFileModal({
       setSelectedFileHandle(fileHandle)
       setSelectedFileName(fileName)
       setImportedAnnotations([])
+      
+      // Move to file info step
       setIsLoading(false)
+      setStep('fileInfo')
+      setTimeout(() => {
+        titleInputRef.current?.focus()
+      }, 100)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create file')
       setIsLoading(false)
     }
   }
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    const trimmedTitle = title.trim()
+    const trimmedAuthor = author.trim()
+    if (!trimmedTitle) {
+      setError('Title is required')
+      return
+    }
+    if (!trimmedAuthor) {
+      setError('Author is required')
+      return
+    }
+
+    const metadata = { title: trimmedTitle, author: trimmedAuthor }
+
+    // If sync file is selected, save metadata to it
+    if (selectedFileHandle && selectedFileName) {
+      try {
+        await fileSyncService.setSyncFile(selectedFileHandle, selectedFileName)
+        const syncData = await fileSyncService.readSyncData()
+        await fileSyncService.writeSyncData({
+          ...syncData,
+          metadata,
+        })
+      } catch (err) {
+        console.error('Failed to save metadata to sync file:', err)
+        // Continue anyway - metadata will be saved in App.tsx
+      }
+    }
+
     if (selectedFileHandle && selectedFileName) {
       onComplete(
-        { title: title.trim(), author: author.trim() || null },
+        metadata,
         importedAnnotations,
         selectedFileHandle,
         selectedFileName
@@ -141,8 +211,26 @@ export function OpenFileModal({
   }
 
   const handleSkipConfirm = () => {
+    const trimmedTitle = title.trim()
+    const trimmedAuthor = author.trim()
+    if (!trimmedTitle) {
+      setError('Title is required')
+      setStep('fileInfo')
+      setTimeout(() => {
+        titleInputRef.current?.focus()
+      }, 100)
+      return
+    }
+    if (!trimmedAuthor) {
+      setError('Author is required')
+      setStep('fileInfo')
+      setTimeout(() => {
+        titleInputRef.current?.focus()
+      }, 100)
+      return
+    }
     onComplete(
-      { title: title.trim(), author: author.trim() || null },
+      { title: trimmedTitle, author: trimmedAuthor },
       [],
       null,
       null
@@ -157,8 +245,6 @@ export function OpenFileModal({
       e.preventDefault()
       if (step === 'fileInfo') {
         handleFileInfoContinue()
-      } else if (step === 'notesSync') {
-        handleFinish()
       }
     }
   }
@@ -166,7 +252,7 @@ export function OpenFileModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+    <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-50 flex items-center justify-center bg-black/50" style={{ minHeight: '100vh' }} onClick={onCancel}>
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -176,94 +262,17 @@ export function OpenFileModal({
           {/* Step Indicator */}
           <div className="flex items-center justify-center mb-6">
             <div className="flex items-center">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'fileInfo' ? 'bg-blue-500 dark:bg-blue-600 text-white' : step === 'notesSync' ? 'bg-blue-500 dark:bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'notesSync' ? 'bg-blue-500 dark:bg-blue-600 text-white' : step === 'fileInfo' ? 'bg-blue-500 dark:bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                 1
               </div>
-              <div className={`w-12 h-0.5 ${step === 'notesSync' || step === 'skipWarning' ? 'bg-blue-500 dark:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'notesSync' ? 'bg-blue-500 dark:bg-blue-600 text-white' : step === 'skipWarning' ? 'bg-orange-500 dark:bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+              <div className={`w-12 h-0.5 ${step === 'fileInfo' || step === 'skipWarning' ? 'bg-blue-500 dark:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${step === 'fileInfo' ? 'bg-blue-500 dark:bg-blue-600 text-white' : step === 'skipWarning' ? 'bg-orange-500 dark:bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                 2
               </div>
             </div>
           </div>
 
-          {/* Step 1: File Information */}
-          {step === 'fileInfo' && (
-            <>
-              <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Open File</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Help the assistant understand what you're reading. This information will be included in your conversations.
-              </p>
-
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Title <span className="text-red-500 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={title}
-                    onChange={(e) => {
-                      setTitle(e.target.value)
-                      setError(null)
-                    }}
-                    placeholder="File or document title"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleFileInfoContinue()
-                      }
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Author
-                  </label>
-                  <input
-                    type="text"
-                    value={author}
-                    onChange={(e) => setAuthor(e.target.value)}
-                    placeholder="Author name (optional)"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleFileInfoContinue()
-                      }
-                    }}
-                  />
-                </div>
-
-              </div>
-
-              <div className="flex items-center justify-end gap-2 mt-6">
-                <button
-                  onClick={onCancel}
-                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleFileInfoContinue}
-                  disabled={!title.trim()}
-                  className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                >
-                  Continue
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Step 2: Notes Synchronization */}
+          {/* Step 1: Notes Synchronization */}
           {step === 'notesSync' && (
             <>
               <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Sync Your Notes</h2>
@@ -346,30 +355,123 @@ export function OpenFileModal({
                 </div>
               </div>
 
+              <div className="flex items-center justify-end gap-2 mt-6">
+                <button
+                  onClick={onCancel}
+                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Always go to fileInfo first to collect title/author
+                    // even when skipping notes, as this info is needed for LLM context
+                    setStep('fileInfo')
+                    setTimeout(() => {
+                      titleInputRef.current?.focus()
+                    }, 100)
+                  }}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50"
+                >
+                  Skip Notes
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 2: File Information */}
+          {step === 'fileInfo' && (
+            <>
+              <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Document Information</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {selectedFileHandle && selectedFileName
+                  ? 'Review or update the document information. This will be saved to your notes file.'
+                  : 'Help the assistant understand what you\'re reading. This information will be included in your conversations with the AI assistant.'}
+              </p>
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
+                  {error}
+                </div>
+              )}
+
+              {selectedFileHandle && selectedFileName && (
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-400">
+                  Notes file: <span className="font-mono">{selectedFileName}</span>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Title <span className="text-red-500 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value)
+                      setError(null)
+                    }}
+                    placeholder="File or document title"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault()
+                        handleFileInfoContinue()
+                      }
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Author <span className="text-red-500 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={author}
+                    onChange={(e) => {
+                      setAuthor(e.target.value)
+                      setError(null)
+                    }}
+                    placeholder="Author name"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault()
+                        handleFileInfoContinue()
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
               <div className="flex items-center justify-between gap-2 mt-6">
                 <button
-                  onClick={() => setStep('fileInfo')}
+                  onClick={() => {
+                    // Go back to notes sync if no file selected yet
+                    // Otherwise stay on fileInfo (user came from skip)
+                    if (!selectedFileHandle) {
+                      setStep('notesSync')
+                    } else {
+                      setStep('notesSync')
+                    }
+                  }}
                   disabled={isLoading}
                   className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50"
                 >
                   Back
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleFinish}
-                    disabled={isLoading}
-                    className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50"
-                  >
-                    Skip Notes
-                  </button>
-                  <button
-                    onClick={handleFinish}
-                    disabled={isLoading || !selectedFileHandle}
-                    className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                  >
-                    Finish
-                  </button>
-                </div>
+                <button
+                  onClick={handleFileInfoContinue}
+                  disabled={isLoading || !title.trim() || !author.trim()}
+                  className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {selectedFileHandle ? 'Finish' : 'Continue'}
+                </button>
               </div>
             </>
           )}
@@ -407,10 +509,10 @@ export function OpenFileModal({
 
               <div className="flex items-center justify-between gap-2 mt-6">
                 <button
-                  onClick={() => setStep('notesSync')}
+                  onClick={() => setStep('fileInfo')}
                   className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
                 >
-                  Go Back to Notes
+                  Go Back
                 </button>
                 <button
                   onClick={handleSkipConfirm}

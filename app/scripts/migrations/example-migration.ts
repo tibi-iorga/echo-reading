@@ -53,9 +53,13 @@ function exampleMigrationV1ToV2() {
       
       // Step 5: Perform migration
       if (data.version === 1) {
+        interface Message {
+          [key: string]: unknown
+          timestamp?: number
+        }
         const migratedData = {
           version: 2,
-          messages: data.messages.map((msg: any) => ({
+          messages: (data.messages as Message[]).map((msg) => ({
             ...msg,
             // Add new fields or transform structure here
             // Example: add timestamp if missing
@@ -107,9 +111,13 @@ function exampleMigrationDryRun() {
       if (data.version === 1) {
         console.log(`[DRY RUN] Would migrate: ${key}`)
         console.log(`  Current:`, data)
+        interface Message {
+          [key: string]: unknown
+          timestamp?: number
+        }
         console.log(`  Would become:`, {
           version: 2,
-          messages: data.messages.map((msg: any) => ({
+          messages: (data.messages as Message[]).map((msg) => ({
             ...msg,
             timestamp: msg.timestamp || Date.now(),
           })),
