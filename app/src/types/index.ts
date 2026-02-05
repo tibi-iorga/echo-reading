@@ -50,7 +50,9 @@ export interface LLMMessage {
 
 export interface LLMProvider {
   name: string
-  sendMessage: (message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]) => Promise<string>
+  sendMessage: (message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: LLMMessage[]) => Promise<string>
+  getAvailableModels(): string[]
+  getDefaultModel(): string
 }
 
 export interface PDFDocument {

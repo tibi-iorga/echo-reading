@@ -48,11 +48,11 @@ class LLMService {
     return this.currentProvider.testConnection(apiKey)
   }
 
-  async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: import('@/types').LLMMessage[]): Promise<string> {
+  async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: import('@/types').LLMMessage[]): Promise<string> {
     if (!this.currentProvider) {
       throw new Error('No LLM provider selected')
     }
-    return this.currentProvider.sendMessage(message, apiKey, systemInstructions, conversationHistory)
+    return this.currentProvider.sendMessage(message, apiKey, model, systemInstructions, conversationHistory)
   }
 }
 

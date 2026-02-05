@@ -54,6 +54,7 @@ function formatRelativeTime(date: Date): string {
 export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfId, onReloadAnnotations, expandSyncFileSection, onSyncFileSectionExpanded }: SettingsPanelProps = {}) {
   const { theme, toggleTheme } = useTheme()
   const [apiKey, setApiKey] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
   const [chatInstructions, setChatInstructions] = useState('')
   const [docTitle, setDocTitle] = useState('')
   const [docAuthor, setDocAuthor] = useState('')
@@ -110,6 +111,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   
   // Track saved values to detect unsaved changes
   const [savedApiKey, setSavedApiKey] = useState('')
+  const [savedModel, setSavedModel] = useState('')
   const [savedChatInstructions, setSavedChatInstructions] = useState('')
   const [savedDocTitle, setSavedDocTitle] = useState('')
   const [savedDocAuthor, setSavedDocAuthor] = useState('')
@@ -133,6 +135,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       // Load API key (now async)
       const storedKey = await storageService.getApiKey()
       const storedInstructions = storageService.getChatInstructions()
+      const storedModel = storageService.getModel()
       
       // Check fallback mode
       setIsInFallbackMode(storageService.isApiKeyInFallbackMode())
@@ -142,6 +145,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         setSavedApiKey(storedKey)
       }
       
+      // Always use OpenAI as the provider
+      llmService.setProvider('OpenAI')
+      const currentProvider = llmService.getCurrentProvider()
+      const defaultModel = currentProvider?.getDefaultModel() || 'gpt-4o'
+      const availableModels = currentProvider?.getAvailableModels() || []
+      // Use stored model if it's still available, otherwise use default
+      const modelToUse = (storedModel && availableModels.includes(storedModel)) ? storedModel : defaultModel
+      setSelectedModel(modelToUse)
+      setSavedModel(modelToUse)
+      
       if (storedInstructions) {
         setChatInstructions(storedInstructions)
         setSavedChatInstructions(storedInstructions)
@@ -149,9 +162,6 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         setChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
         setSavedChatInstructions(DEFAULT_CHAT_INSTRUCTIONS)
       }
-      
-      // Always use OpenAI as the provider
-      llmService.setProvider('OpenAI')
 
       // Load document metadata if available (only on initial load or pdfId change)
       if (documentMetadata) {
@@ -257,7 +267,8 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   // Check unsaved changes per section
   const hasUnsavedLLMChanges = () => {
     const apiKeyChanged = apiKey.trim() !== savedApiKey
-    return apiKeyChanged
+    const modelChanged = selectedModel !== savedModel
+    return apiKeyChanged || modelChanged
   }
 
 
@@ -291,6 +302,10 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       await storageService.removeApiKey()
       setSavedApiKey('')
     }
+    
+    // Save model
+    storageService.setModel(selectedModel)
+    setSavedModel(selectedModel)
     
     // Always use OpenAI as the provider
     llmService.setProvider('OpenAI')
@@ -755,6 +770,29 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               >
                 Get your API key from OpenAI
               </a>
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Model
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => {
+                setSelectedModel(e.target.value)
+                setTestResult(null)
+              }}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              {llmService.getCurrentProvider()?.getAvailableModels().map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Select which model to use for chat responses. Make sure your API key has access to the selected model.
             </p>
           </div>
           

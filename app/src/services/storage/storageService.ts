@@ -9,6 +9,7 @@ import {
 import type { Annotation } from '@/types'
 
 const PROVIDER_STORAGE_KEY = 'llm_provider'
+const MODEL_STORAGE_KEY = 'llm_model'
 const ANNOTATIONS_STORAGE_KEY = 'pdf_annotations'
 const CHAT_INSTRUCTIONS_STORAGE_KEY = 'llm_chat_instructions'
 const DOCUMENT_METADATA_STORAGE_KEY = 'pdf_document_metadata'
@@ -75,6 +76,14 @@ class StorageService {
 
   setProvider(provider: string): void {
     localStorage.setItem(PROVIDER_STORAGE_KEY, provider)
+  }
+
+  getModel(): string | null {
+    return localStorage.getItem(MODEL_STORAGE_KEY)
+  }
+
+  setModel(model: string): void {
+    localStorage.setItem(MODEL_STORAGE_KEY, model)
   }
 
   getAnnotations(pdfId: string): Annotation[] {

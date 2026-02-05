@@ -9,6 +9,20 @@ export interface TestConnectionResult {
 export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
 
+  getAvailableModels(): string[] {
+    return [
+      'gpt-4o',
+      'gpt-4o-mini',
+      'gpt-4-turbo',
+      'gpt-4',
+      'gpt-3.5-turbo',
+    ]
+  }
+
+  getDefaultModel(): string {
+    return 'gpt-4o'
+  }
+
   /**
    * Test the API connection by calling the models endpoint
    * This is free and confirms the key is valid
@@ -43,7 +57,7 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
-  async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
+  async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
     
     // Add system instructions if provided
@@ -79,16 +93,29 @@ export class OpenAIProvider implements LLMProvider {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model,
         messages,
         temperature: 0.7,
       }),
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      const rawMessage = error.error?.message || 'Failed to send message to OpenAI'
-      throw new Error(sanitizeErrorMessage(rawMessage))
+      let errorMessage = 'Failed to send message to OpenAI'
+      try {
+        const error = await response.json()
+        // OpenAI error format: { error: { message: string, type: string, ... } }
+        if (error?.error?.message) {
+          errorMessage = error.error.message
+        } else if (typeof error === 'string') {
+          errorMessage = error
+        } else if (error?.message) {
+          errorMessage = error.message
+        }
+      } catch {
+        // If JSON parsing fails, use status text or default message
+        errorMessage = response.statusText || errorMessage
+      }
+      throw new Error(sanitizeErrorMessage(errorMessage))
     }
 
     const data = await response.json()
@@ -98,6 +125,20 @@ export class OpenAIProvider implements LLMProvider {
 
 export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
+
+  getAvailableModels(): string[] {
+    return [
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022',
+      'claude-3-opus-20240229',
+      'claude-3-sonnet-20240229',
+      'claude-3-haiku-20240307',
+    ]
+  }
+
+  getDefaultModel(): string {
+    return 'claude-3-5-sonnet-20241022'
+  }
 
   /**
    * Test the API connection
@@ -140,7 +181,7 @@ export class AnthropicProvider implements LLMProvider {
     }
   }
 
-  async sendMessage(message: string, apiKey: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
+  async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
     
     // Add conversation history (excluding system messages, as we handle that separately)
@@ -162,7 +203,7 @@ export class AnthropicProvider implements LLMProvider {
     })
 
     const body: { model: string; max_tokens: number; messages: Array<{ role: string; content: string }>; system?: string } = {
-      model: 'claude-3-opus-20240229',
+      model,
       max_tokens: 1024,
       messages,
     }
