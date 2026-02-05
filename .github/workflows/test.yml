@@ -27,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./app
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run linter
         working-directory: ./app
