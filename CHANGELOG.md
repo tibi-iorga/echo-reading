@@ -5,7 +5,7 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.6] - 2026-02-05
+## [0.2.0] - 2026-02-05
 
 ### Changed
 - **Major UI redesign**: Complete overhaul of user interface components for improved usability and modern design
