@@ -1179,8 +1179,8 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       {/* Confirmation Modal for Disconnect */}
       <ConfirmModal
         isOpen={showDisconnectConfirm}
-        title="Disconnect Notes File"
-        message="Are you sure you want to disconnect the notes file? Your notes will still be saved locally, but they won't sync across browsers or devices."
+        title="Disconnect Sync File"
+        message="Are you sure you want to disconnect the sync file? Your notes will still be saved locally, but they won't sync across browsers or devices."
         confirmText="Disconnect"
         cancelText="Cancel"
         onConfirm={handleConfirmDisconnect}

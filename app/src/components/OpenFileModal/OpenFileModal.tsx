@@ -72,7 +72,7 @@ export function OpenFileModal({
 
     try {
       if (!fileSyncService.isSupported()) {
-        setError('File System Access API is not supported in this browser. Please use a modern browser like Chrome or Edge to sync notes files.')
+        setError('File System Access API is not supported in this browser. Please use a modern browser like Chrome or Edge to sync files.')
         setIsLoading(false)
         return
       }
@@ -276,9 +276,6 @@ export function OpenFileModal({
           {step === 'notesSync' && (
             <>
               <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Sync Your Notes</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Link a notes file to sync your annotations across browsers and devices.
-              </p>
 
               {error && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
@@ -288,13 +285,13 @@ export function OpenFileModal({
 
               {selectedFileHandle && selectedFileName && (
                 <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-green-700 dark:text-green-400">
-                  Notes file selected: <span className="font-mono">{selectedFileName}</span>
+                  Sync file selected: <span className="font-mono">{selectedFileName}</span>
                 </div>
               )}
 
               <div className="space-y-4">
                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                  Select an existing notes file or create a new one. All your notes will sync automatically.
+                  Select an existing sync file or create a new one. All your notes will sync automatically.
                 </p>
                 
                 <div className="space-y-2">
@@ -316,7 +313,7 @@ export function OpenFileModal({
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>Select Existing Notes File</span>
+                        <span>Select Existing Sync File</span>
                       </>
                     )}
                   </button>
@@ -386,7 +383,7 @@ export function OpenFileModal({
               <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Document Information</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {selectedFileHandle && selectedFileName
-                  ? 'Review or update the document information. This will be saved to your notes file.'
+                  ? 'Review or update the document information. This will be saved to your sync file.'
                   : 'Help the assistant understand what you\'re reading. This information will be included in your conversations with the AI assistant.'}
               </p>
 
@@ -398,7 +395,7 @@ export function OpenFileModal({
 
               {selectedFileHandle && selectedFileName && (
                 <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-400">
-                  Notes file: <span className="font-mono">{selectedFileName}</span>
+                  Sync file: <span className="font-mono">{selectedFileName}</span>
                 </div>
               )}
 
@@ -490,7 +487,7 @@ export function OpenFileModal({
 
               <div className="space-y-4">
                 <p className="text-sm text-gray-700 dark:text-gray-300">
-                  You have chosen not to link a notes file. Your notes for this file will only be saved locally in this browser session.
+                  You have chosen not to link a sync file. Your notes for this file will only be saved locally in this browser session.
                 </p>
 
                 <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-4">
@@ -503,7 +500,7 @@ export function OpenFileModal({
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  We recommend linking a notes file for persistent storage across all your devices and browsers.
+                  We recommend linking a sync file for persistent storage across all your devices and browsers.
                 </p>
               </div>
 

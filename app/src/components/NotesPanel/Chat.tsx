@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { llmService } from '@/services/llm/llmService'
 import { storageService } from '@/services/storage/storageService'
 import { sanitizeError } from '@/services/llm/errorSanitizer'
@@ -232,20 +232,49 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     }
   }, [quotedText])
 
+  // Resize textarea function
+  const resizeTextarea = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    // Skip resize if container is too narrow (during sidebar collapse transition)
+    // This prevents incorrect scrollHeight calculations when width is constrained
+    const rect = textarea.getBoundingClientRect()
+    const MIN_CONTAINER_WIDTH = 100
+    if (rect.width < MIN_CONTAINER_WIDTH) {
+      return
+    }
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto'
+    const scrollHeight = textarea.scrollHeight
+    const maxHeight = 200
+    const newHeight = Math.min(scrollHeight, maxHeight)
+    textarea.style.height = `${newHeight}px`
+    // Only show scrollbar if content exceeds max height
+    textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden'
+  }, [input])
+
   // Auto-resize textarea based on content
   useEffect(() => {
+    resizeTextarea()
+  }, [resizeTextarea])
+
+  // Also resize when container width changes (e.g., after sidebar expand)
+  useEffect(() => {
     const textarea = textareaRef.current
-    if (textarea) {
-      // Reset height to auto to get the correct scrollHeight
-      textarea.style.height = 'auto'
-      const scrollHeight = textarea.scrollHeight
-      const maxHeight = 200
-      const newHeight = Math.min(scrollHeight, maxHeight)
-      textarea.style.height = `${newHeight}px`
-      // Only show scrollbar if content exceeds max height
-      textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden'
-    }
-  }, [input])
+    if (!textarea) return
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce resize to avoid excessive calls during transitions
+      setTimeout(() => {
+        resizeTextarea()
+      }, 50)
+    })
+
+    resizeObserver.observe(textarea)
+    return () => resizeObserver.disconnect()
+  }, [resizeTextarea])
 
   // Close commands dropdown when clicking outside
   useEffect(() => {
