@@ -5,6 +5,30 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-02-05
+
+### Fixed
+- Fixed all TypeScript lint errors by replacing 'any' types with proper type definitions
+- Fixed React hooks dependency warnings in App, NotesPanel, and SettingsPanel components
+- Fixed TypeScript compilation errors in pdfTextExtractor utility
+- Improved E2E test helpers to properly wait for UI elements before interaction
+- Fixed unused variable warnings in test files
+
+### Security
+- Updated jspdf from 4.0.0 to 4.1.0 to address high-severity vulnerabilities:
+  - PDF Injection in AcroFormChoiceField (GHSA-pqxr-3g65-p328)
+  - Denial of Service via Unvalidated BMP Dimensions (GHSA-95fx-jjr5-f39c)
+  - Stored XMP Metadata Injection (GHSA-vm32-vv63-w422)
+  - Shared State Race Condition in addJS Plugin (GHSA-cjw8-79x6-5cj4)
+
+### Changed
+- Added role='tab' attributes to NotesPanel tabs for improved accessibility
+- Improved type safety across codebase with proper TypeScript interfaces
+
+### Note
+- E2E tests requiring PDF files will fail until test fixtures are added to the repository
+- Remaining security vulnerabilities (pdfjs-dist, vite/esbuild) require breaking changes and will be addressed in a future update
+
 ## [0.1.5] - 2026-01-29
 
 ### Fixed
