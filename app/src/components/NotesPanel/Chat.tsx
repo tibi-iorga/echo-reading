@@ -253,12 +253,12 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     textarea.style.height = `${newHeight}px`
     // Only show scrollbar if content exceeds max height
     textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden'
-  }, [input])
+  }, [])
 
   // Auto-resize textarea based on content
   useEffect(() => {
     resizeTextarea()
-  }, [resizeTextarea])
+  }, [resizeTextarea, input])
 
   // Also resize when container width changes (e.g., after sidebar expand)
   useEffect(() => {
