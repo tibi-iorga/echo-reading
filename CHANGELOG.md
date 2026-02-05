@@ -7,12 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.6] - 2026-02-05
 
+### Changed
+- **Major UI redesign**: Complete overhaul of user interface components for improved usability and modern design
+  - Redesigned NotesPanel with improved tab navigation and layout
+  - Redesigned SettingsPanel with better organization and visual hierarchy
+  - Redesigned FileSelector with enhanced file selection experience
+  - Redesigned OpenFileModal with improved workflow and feedback
+  - Redesigned PDFViewer with better controls and navigation
+  - Redesigned Chat interface with improved message display and interactions
+  - Added new AlertModal and ConfirmModal components for consistent user feedback
+  - Added PDFToolbar component for better PDF navigation controls
+  - Improved overall visual consistency and spacing across all components
+
 ### Fixed
 - Fixed all TypeScript lint errors by replacing 'any' types with proper type definitions
 - Fixed React hooks dependency warnings in App, NotesPanel, and SettingsPanel components
 - Fixed TypeScript compilation errors in pdfTextExtractor utility
 - Improved E2E test helpers to properly wait for UI elements before interaction
 - Fixed unused variable warnings in test files
+- Added role='tab' attributes to NotesPanel tabs for improved accessibility
 
 ### Security
 - Updated jspdf from 4.0.0 to 4.1.0 to address high-severity vulnerabilities:
@@ -21,8 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stored XMP Metadata Injection (GHSA-vm32-vv63-w422)
   - Shared State Race Condition in addJS Plugin (GHSA-cjw8-79x6-5cj4)
 
-### Changed
-- Added role='tab' attributes to NotesPanel tabs for improved accessibility
+### Changed (Technical)
 - Improved type safety across codebase with proper TypeScript interfaces
 
 ### Note
