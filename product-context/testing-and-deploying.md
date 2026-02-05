@@ -543,18 +543,179 @@ Add entry at top of file:
 
 ---
 
-### Step 6: Push (Triggers Auto-Deployment)
+### Step 6: Final Pre-Push Verification (REQUIRED)
+
+**⚠️ CRITICAL:** Before pushing, verify all release information is correct. This is your last chance to catch mistakes before they go live.
+
+**Run this verification checklist:**
+
+#### A. Version Number Check
+```bash
+cd app
+cat package.json | grep '"version"'
+```
+
+**Verify:**
+- [ ] Version number matches the type of changes made
+  - Patch (0.1.X): Bug fixes, small improvements
+  - Minor (0.X.0): New features, new capabilities  
+  - Major (X.0.0): Breaking changes
+- [ ] Version was bumped if changes warrant it
+- [ ] Version follows semantic versioning (X.Y.Z format)
+- [ ] Version number is consistent across all files (if applicable)
+
+**If version bump was needed but not done:**
+1. Stop and bump version first
+2. Update CHANGELOG.md
+3. Re-run this verification
+
+---
+
+#### B. CHANGELOG.md Verification
+```bash
+cat CHANGELOG.md | head -20
+```
+
+**Verify:**
+- [ ] CHANGELOG.md entry exists (if version was bumped)
+- [ ] Date is correct (today's date in YYYY-MM-DD format)
+- [ ] Version number in CHANGELOG matches package.json
+- [ ] All significant changes are documented
+- [ ] Security fixes are clearly marked
+- [ ] Breaking changes are clearly marked (if any)
+- [ ] Categories used are appropriate (Added/Changed/Fixed/Security)
+- [ ] Descriptions are clear and user-friendly
+- [ ] No placeholder text or TODOs remain
+
+**Common mistakes to catch:**
+- ❌ Wrong version number
+- ❌ Missing date or wrong date format
+- ❌ Security fixes not documented
+- ❌ Breaking changes not clearly marked
+- ❌ Vague descriptions ("Fixed bugs" instead of "Fixed PDF rendering issue")
+
+---
+
+#### C. Commit Message Review
+```bash
+git log -1
+```
+
+**Verify:**
+- [ ] Commit message follows conventional format (`type: description`)
+- [ ] Commit message accurately describes the changes
+- [ ] Type is appropriate (feat/fix/docs/security/etc.)
+- [ ] Description is clear and specific
+- [ ] No sensitive information in commit message
+
+**If multiple commits, review all:**
+```bash
+git log --oneline -5
+```
+
+---
+
+#### D. Release Notes Summary (for your records)
+
+**Create a mental summary of what's being released:**
+
+- **What changed?** [Brief description]
+- **Who is affected?** [All users / Specific feature users / No one]
+- **Is this breaking?** [Yes / No]
+- **Are there security fixes?** [Yes / No - if yes, document clearly]
+- **Should users take action?** [Yes - update/revoke keys / No]
+
+**If this is a significant release, consider:**
+- Creating a release tag after push
+- Notifying users (if applicable)
+- Updating documentation (if needed)
+
+---
+
+#### E. Final Security Check
+
+**One last security review before push:**
+
+- [ ] No API keys or secrets in any committed files
+- [ ] No sensitive user data in commits
+- [ ] No `.env` files committed
+- [ ] Error messages don't expose sensitive info
+- [ ] All security fixes are documented in CHANGELOG
+
+**Run final check:**
+```bash
+git diff HEAD~1 --name-only | grep -E '\.(env|key|pem|cert|p12|pfx)$'
+```
+
+Should return nothing. If files appear, STOP and unstage them.
+
+---
+
+#### F. Ready to Deploy Checklist
+
+**Final confirmation before push:**
+
+- [ ] All QA checks passed (from Step 1)
+- [ ] Version number is correct
+- [ ] CHANGELOG.md is updated and accurate
+- [ ] Commit message is correct
+- [ ] No sensitive files in commit
+- [ ] Tests pass locally
+- [ ] Build succeeds
+- [ ] Ready for production
+
+**If ANY item is unchecked:**
+- ❌ **STOP** - Do not push
+- Fix the issue
+- Re-run relevant checks
+- Then proceed
+
+---
+
+#### G. Human Verification Prompt
+
+**Before executing `git push`, ask yourself:**
+
+1. **"Am I confident this is ready for users?"**
+   - If unsure, review again or get a second opinion
+
+2. **"Would I be comfortable explaining these changes to users?"**
+   - If not, improve documentation
+
+3. **"If this breaks in production, can I fix it quickly?"**
+   - If not, consider more testing
+
+4. **"Are there any 'gotchas' users should know about?"**
+   - If yes, document them in CHANGELOG
+
+**Only proceed if you can answer "yes" to all questions.**
+
+---
+
+**After completing this verification:**
+
+✅ All checks passed → Proceed to Step 7 (Push)
+❌ Any check failed → Fix issues, then re-verify
+
+**Why this matters:** Once you push, changes go live immediately. This verification catches mistakes before they affect users.
+
+---
+
+### Step 7: Push (Triggers Auto-Deployment)
 ```bash
 git push
 ```
 
 **⚠️ WARNING:** Pushes to `master` trigger automatic Vercel deployment.
 
-**Before pushing:**
-- [ ] All QA checks passed
-- [ ] No sensitive files in commit
-- [ ] Tests pass locally
-- [ ] Ready for production
+**Before pushing (also verify Step 6 - Final Pre-Push Verification):**
+- [ ] All QA checks passed (Step 1)
+- [ ] Version number verified (Step 6A)
+- [ ] CHANGELOG.md verified (Step 6B)
+- [ ] Commit message reviewed (Step 6C)
+- [ ] Final security check passed (Step 6E)
+- [ ] Ready to deploy checklist complete (Step 6F)
+- [ ] Human verification questions answered (Step 6G)
 
 **After pushing:**
 - Monitor deployment in Vercel dashboard
@@ -566,7 +727,7 @@ git push
 
 ---
 
-### Step 7: Post-Deployment Verification
+### Step 8: Post-Deployment Verification
 
 After deployment completes:
 
@@ -584,7 +745,7 @@ After deployment completes:
 
 ---
 
-### Step 8: Optional: Create Release Tag
+### Step 9: Optional: Create Release Tag
 For minor/major releases or stable checkpoints:
 ```bash
 git tag -a v0.1.2 -m "Release v0.1.2"
@@ -634,7 +795,12 @@ git commit -m "type: description"
 # Version bump (from app directory)
 cd app && npm run version:patch
 
-# Push (triggers deployment)
+# Final verification before push (Step 6)
+cd app && cat package.json | grep '"version"'    # Check version
+cat CHANGELOG.md | head -20                      # Verify changelog
+git log -1                                       # Review commit message
+
+# Push (triggers deployment) - ONLY after Step 6 verification
 git push
 
 # Tag release
@@ -700,6 +866,9 @@ If you're unsure about any check:
 3. **Review carefully:** Check what you're committing
 4. **Fix blocking issues:** Don't commit with BLOCKING problems
 5. **Document decisions:** If proceeding with warnings, explain why
-6. **Verify deployment:** Check deployed site after pushing
+6. **Verify before push:** Complete Final Pre-Push Verification (Step 6) - check version, CHANGELOG, and release notes
+7. **Verify deployment:** Check deployed site after pushing
 
 Following this process ensures safe, tested, production-ready code.
+
+**Remember:** The Final Pre-Push Verification (Step 6) is your last chance to catch mistakes before they go live. Never skip it.
