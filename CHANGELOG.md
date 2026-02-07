@@ -5,6 +5,22 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-07
+
+### Added
+- **Export preview modal**: Preview annotations before exporting with a clean visual summary
+- **Multi-format export**: Export notes to Markdown, PDF, or plain text formats
+- **API key connection status**: Visual indicator (green dot for connected, red X for failed) with automatic testing on load and save
+- **Shared SelectionActions component**: Reusable component for text selection menus in PDF viewer and chat
+- **Clear chat confirmation**: Confirmation modal before clearing chat history to prevent accidental data loss
+- **Responsive tab bar**: Tab buttons switch to icon-only mode when panel is narrow
+
+### Changed
+- Redesigned AnnotationList with accent colored borders, cleaner layout, and overflow menu for actions
+- Improved SettingsPanel section headers with text truncation for narrow panels
+- OpenFileModal cancel now properly clears PDF state instead of keeping it
+- Various UI polish and layout improvements for better experience in narrow panels
+
 ## [0.2.0] - 2026-02-05
 
 ### Changed
