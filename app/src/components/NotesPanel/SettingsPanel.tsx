@@ -79,8 +79,8 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   
   // API key UI state
   const [showApiKey, setShowApiKey] = useState(false)
-  const [isTesting, setIsTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'connected' | 'failed'>('untested')
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
   const [showRemoveApiKeyConfirm, setShowRemoveApiKeyConfirm] = useState(false)
   const [isInFallbackMode, setIsInFallbackMode] = useState(false)
@@ -107,6 +107,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       }
     }
   }, [expandSyncFileSection, onSyncFileSectionExpanded])
+
   const [isChatInstructionsExpanded, setIsChatInstructionsExpanded] = useState(true)
   
   // Track saved values to detect unsaved changes
@@ -143,6 +144,21 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       if (storedKey) {
         setApiKey(storedKey)
         setSavedApiKey(storedKey)
+        
+        // Test connection on load
+        setConnectionStatus('testing')
+        try {
+          const result = await llmService.testConnection(storedKey)
+          if (result.success) {
+            setConnectionStatus('connected')
+          } else {
+            setConnectionStatus('failed')
+            setConnectionError(result.message)
+          }
+        } catch (error) {
+          setConnectionStatus('failed')
+          setConnectionError(error instanceof Error ? error.message : 'Connection test failed')
+        }
       }
       
       // Always use OpenAI as the provider
@@ -286,7 +302,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   // Save handlers for each section
   const handleSaveLLM = async () => {
     setIsSavingLLM(true)
-    setTestResult(null)
+    setConnectionError(null)
     
     // Small delay to show button state change
     await new Promise(resolve => setTimeout(resolve, 150))
@@ -297,18 +313,41 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     if (apiKey.trim()) {
       await storageService.setApiKey(apiKey.trim())
       setSavedApiKey(apiKey.trim())
+      
+      // Save model
+      storageService.setModel(selectedModel)
+      setSavedModel(selectedModel)
+      
+      // Always use OpenAI as the provider
+      llmService.setProvider('OpenAI')
+      
+      // Auto test connection after saving
+      setConnectionStatus('testing')
+      try {
+        const result = await llmService.testConnection(apiKey.trim())
+        if (result.success) {
+          setConnectionStatus('connected')
+        } else {
+          setConnectionStatus('failed')
+          setConnectionError(result.message)
+        }
+      } catch (error) {
+        setConnectionStatus('failed')
+        setConnectionError(error instanceof Error ? error.message : 'Connection test failed')
+      }
     } else {
       // Remove API key from storage if cleared
       await storageService.removeApiKey()
       setSavedApiKey('')
+      setConnectionStatus('untested')
+      
+      // Save model
+      storageService.setModel(selectedModel)
+      setSavedModel(selectedModel)
+      
+      // Always use OpenAI as the provider
+      llmService.setProvider('OpenAI')
     }
-    
-    // Save model
-    storageService.setModel(selectedModel)
-    setSavedModel(selectedModel)
-    
-    // Always use OpenAI as the provider
-    llmService.setProvider('OpenAI')
     
     // Dispatch event if API key status changed (added or removed)
     const hasApiKeyAfter = await storageService.hasApiKey()
@@ -325,28 +364,6 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     }, 3000)
   }
 
-  const handleTestConnection = async () => {
-    if (!apiKey.trim()) {
-      setTestResult({ success: false, message: 'Please enter an API key first' })
-      return
-    }
-    
-    setIsTesting(true)
-    setTestResult(null)
-    
-    try {
-      const result = await llmService.testConnection(apiKey.trim())
-      setTestResult(result)
-    } catch (error) {
-      setTestResult({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Connection test failed' 
-      })
-    } finally {
-      setIsTesting(false)
-    }
-  }
-
   const handleRemoveApiKey = () => {
     setShowRemoveApiKeyConfirm(true)
   }
@@ -359,7 +376,8 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       await storageService.removeApiKey()
       setApiKey('')
       setSavedApiKey('')
-      setTestResult(null)
+      setConnectionStatus('untested')
+      setConnectionError(null)
       window.dispatchEvent(new CustomEvent('apiKeySaved'))
     } catch (error) {
       console.error('Failed to remove API key:', error)
@@ -636,15 +654,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
 
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-auto p-4 space-y-6">
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
         <button
           onClick={() => setIsStyleExpanded(!isStyleExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
         >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Style</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-left truncate min-w-0">Style</h2>
           <svg
-            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isStyleExpanded ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 transition-transform duration-200 ${isStyleExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -654,9 +673,9 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         </button>
         
         {isStyleExpanded && (
-          <div className="px-4 pb-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="px-4 pt-4 pb-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Appearance
                 </label>
@@ -667,22 +686,22 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               <button
                 onClick={toggleTheme}
                 type="button"
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm font-medium text-gray-900 dark:text-white transition-colors flex items-center gap-2"
+                className="flex-shrink-0 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm font-medium text-gray-900 dark:text-white transition-colors flex items-center justify-center gap-2"
                 aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
               >
                 {theme === 'light' ? (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                     </svg>
-                    <span>Dark Mode</span>
+                    <span className="whitespace-nowrap">Dark Mode</span>
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
-                    <span>Light Mode</span>
+                    <span className="whitespace-nowrap">Light Mode</span>
                   </>
                 )}
               </button>
@@ -694,11 +713,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
         <button
           onClick={() => setIsLLMConfigExpanded(!isLLMConfigExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
         >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Connect Your API Key</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-left truncate min-w-0">API Key</h2>
           <svg
-            className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isLLMConfigExpanded ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-500 flex-shrink-0 transition-transform duration-200 ${isLLMConfigExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -708,7 +727,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         </button>
         
         {isLLMConfigExpanded && (
-          <div className="px-4 pb-4 space-y-4">
+          <div className="px-4 pt-4 pb-4 space-y-4">
           {/* Privacy explanation */}
           <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <p className="text-sm text-gray-600 dark:text-gray-300">
@@ -727,8 +746,23 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           )}
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              API Key
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <span>API Key</span>
+              {/* Connection status indicator */}
+              {connectionStatus === 'testing' && (
+                <svg className="w-3.5 h-3.5 animate-spin text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              {connectionStatus === 'connected' && (
+                <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Connected" />
+              )}
+              {connectionStatus === 'failed' && (
+                <svg className="w-3.5 h-3.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label={connectionError || 'Connection failed'}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
             </label>
             <div className="flex gap-2">
               <div className="flex-1 relative">
@@ -737,7 +771,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                   value={apiKey}
                   onChange={(e) => {
                     setApiKey(e.target.value)
-                    setTestResult(null)
+                    // Reset connection status when key changes
+                    if (e.target.value.trim() !== savedApiKey) {
+                      setConnectionStatus('untested')
+                      setConnectionError(null)
+                    }
                   }}
                   placeholder="sk-..."
                   className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
@@ -781,9 +819,9 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               value={selectedModel}
               onChange={(e) => {
                 setSelectedModel(e.target.value)
-                setTestResult(null)
               }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none bg-no-repeat bg-right"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundSize: '1.25rem', backgroundPosition: 'right 0.5rem center' }}
             >
               {llmService.getCurrentProvider()?.getAvailableModels().map((model) => (
                 <option key={model} value={model}>
@@ -796,86 +834,45 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             </p>
           </div>
           
-          {/* Test result feedback */}
-          {testResult && (
-            <div className={`p-3 rounded-lg ${
-              testResult.success 
-                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
-                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-            }`}>
-              <div className="flex items-center gap-2">
-                {testResult.success ? (
-                  <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                )}
-                <span className={`text-sm ${
-                  testResult.success 
-                    ? 'text-green-800 dark:text-green-200' 
-                    : 'text-red-800 dark:text-red-200'
-                }`}>
-                  {testResult.message}
-                </span>
-              </div>
-            </div>
+          {/* Connection error message (subtle) */}
+          {connectionStatus === 'failed' && connectionError && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              {connectionError}
+            </p>
           )}
           
           {/* Action buttons */}
           <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
-            <div className="flex gap-2">
-              <button
-                onClick={handleSaveLLM}
-                disabled={isSavingLLM || !hasUnsavedLLMChanges()}
-                className={`flex-1 px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
-                  showSuccessLLM
-                    ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
-                    : hasUnsavedLLMChanges()
-                    ? 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700'
-                    : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                }`}
-              >
-                {showSuccessLLM ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Saved</span>
-                  </>
-                ) : isSavingLLM ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>Save Key</span>
-                )}
-              </button>
-              
-              <button
-                onClick={handleTestConnection}
-                disabled={isTesting || !apiKey.trim()}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {isTesting ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Testing...</span>
-                  </>
-                ) : (
-                  <span>Test Connection</span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleSaveLLM}
+              disabled={isSavingLLM || connectionStatus === 'testing' || !hasUnsavedLLMChanges()}
+              className={`w-full px-4 py-2 text-white rounded transition-all duration-200 flex items-center justify-center gap-2 ${
+                showSuccessLLM
+                  ? 'bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700'
+                  : hasUnsavedLLMChanges()
+                  ? 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700'
+                  : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+              }`}
+            >
+              {showSuccessLLM ? (
+                <>
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="whitespace-nowrap">Saved</span>
+                </>
+              ) : isSavingLLM || connectionStatus === 'testing' ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="whitespace-nowrap">{connectionStatus === 'testing' ? 'Testing...' : 'Saving...'}</span>
+                </>
+              ) : (
+                <span className="whitespace-nowrap">Save</span>
+              )}
+            </button>
             
             {/* Remove key button */}
             {savedApiKey && (
@@ -898,11 +895,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
           <button
             onClick={() => setIsDocumentInfoExpanded(!isDocumentInfoExpanded)}
-            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
           >
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Document Information</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-left truncate min-w-0">Document</h2>
             <svg
-              className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isDocumentInfoExpanded ? 'rotate-180' : ''}`}
+              className={`w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 transition-transform duration-200 ${isDocumentInfoExpanded ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -912,7 +909,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           </button>
           
           {isDocumentInfoExpanded && (
-            <div className="px-4 pb-4 space-y-4">
+            <div className="px-4 pt-4 pb-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Title <span className="text-red-500 dark:text-red-400">*</span>
@@ -981,11 +978,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         <div ref={syncFileSectionRef} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
           <button
             onClick={() => setIsSourceFileExpanded(!isSourceFileExpanded)}
-            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
           >
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Sync File</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-left truncate min-w-0">Sync File</h2>
             <svg
-              className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isSourceFileExpanded ? 'rotate-180' : ''}`}
+              className={`w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 transition-transform duration-200 ${isSourceFileExpanded ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -995,7 +992,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           </button>
           
           {isSourceFileExpanded && (
-            <div className="px-4 pb-4 space-y-4">
+            <div className="px-4 pt-4 pb-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Current File
@@ -1013,9 +1010,9 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                     <button
                       onClick={handleDisconnectFile}
                       disabled={isDisconnecting}
-                      className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
-                      {isDisconnecting ? 'Disconnecting...' : 'Disconnect File'}
+                      {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                     </button>
                   )}
                 </div>
@@ -1037,18 +1034,18 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                 >
                   {isChangingFile ? (
                     <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      <span>Changing...</span>
+                      <span className="whitespace-nowrap">Changing...</span>
                     </>
                   ) : (
                     <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      <span>Change Sync File</span>
+                      <span className="whitespace-nowrap">Change File</span>
                     </>
                   )}
                 </button>
@@ -1061,18 +1058,18 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                   >
                     {isCreatingFile ? (
                       <>
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Creating...</span>
+                        <span className="whitespace-nowrap">Creating...</span>
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        <span>Create Sync File</span>
+                        <span className="whitespace-nowrap">Create File</span>
                       </>
                     )}
                   </button>
@@ -1084,18 +1081,18 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
                   >
                     {isChangingFile ? (
                       <>
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Loading...</span>
+                        <span className="whitespace-nowrap">Loading...</span>
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>Select Existing File</span>
+                        <span className="whitespace-nowrap">Select File</span>
                       </>
                     )}
                   </button>
@@ -1109,11 +1106,11 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
         <button
           onClick={() => setIsChatInstructionsExpanded(!isChatInstructionsExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
         >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chat Instructions</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-left truncate min-w-0">Instructions</h2>
           <svg
-            className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isChatInstructionsExpanded ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 transition-transform duration-200 ${isChatInstructionsExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -1123,7 +1120,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         </button>
         
         {isChatInstructionsExpanded && (
-          <div className="px-4 pb-4 space-y-4">
+          <div className="px-4 pt-4 pb-4 space-y-4">
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
               These instructions are sent to the LLM as system context to guide how it responds. 
@@ -1199,8 +1196,10 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           </div>
         )}
       </div>
+      </div>
 
-      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+      {/* Footer pinned to bottom */}
+      <div className="flex-shrink-0 px-4 py-3">
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
           Echo v{VERSION}
           {' · '}

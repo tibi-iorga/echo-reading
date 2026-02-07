@@ -8,7 +8,7 @@ import { NotesPanel } from '@/components/NotesPanel/NotesPanel'
 import { FileSelector } from '@/components/FileSelector/FileSelector'
 import { OpenFileModal } from '@/components/OpenFileModal/OpenFileModal'
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle'
-import { exportToMarkdown, downloadMarkdown } from '@/utils/export'
+import { exportToMarkdown, downloadMarkdown, exportToText, downloadText, exportToPDF, downloadPDF } from '@/utils/export'
 // import { llmService } from '@/services/llm/llmService' // Unused
 import { storageService } from '@/services/storage/storageService'
 import { fileSyncService } from '@/services/fileSync/fileSyncService'
@@ -228,7 +228,7 @@ function App() {
     setExpandSyncFileSection(false)
   }, [])
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback((format: 'markdown' | 'pdf' | 'txt') => {
     if (annotations.length === 0) {
       setAlertState({
         isOpen: true,
@@ -238,10 +238,21 @@ function App() {
       return
     }
 
-    const markdown = exportToMarkdown(annotations)
-    const filename = pdf ? `${pdf.file.name.replace('.pdf', '')}_notes.md` : 'notes.md'
-    downloadMarkdown(markdown, filename)
-  }, [annotations, pdf])
+    const baseName = pdf ? pdf.file.name.replace('.pdf', '') : 'notes'
+    const metadata = documentMetadata ? { title: documentMetadata.title, author: documentMetadata.author } : undefined
+
+    if (format === 'markdown') {
+      const markdown = exportToMarkdown(annotations, metadata)
+      downloadMarkdown(markdown, `${baseName}_notes.md`)
+    } else if (format === 'txt') {
+      const text = exportToText(annotations, metadata)
+      downloadText(text, `${baseName}_notes.txt`)
+    } else if (format === 'pdf') {
+      exportToPDF(annotations, metadata).then((blob) => {
+        downloadPDF(blob, `${baseName}_notes.pdf`)
+      })
+    }
+  }, [annotations, pdf, documentMetadata])
 
   const handleOpenFileComplete = useCallback(async (
     metadata: { title: string; author: string | null },
@@ -314,13 +325,10 @@ function App() {
   }, [pdf, reloadAnnotations])
 
   const handleOpenFileCancel = useCallback(() => {
-    // User cancelled - still save parsed metadata
-    if (pdf && documentMetadata) {
-      const pdfId = `${pdf.file.name}_${pdf.file.size}`
-      storageService.setDocumentMetadata(pdfId, documentMetadata)
-    }
+    // User cancelled - clear the PDF and return to file selector
     setShowOpenFileModal(false)
-  }, [pdf, documentMetadata])
+    clearPDF()
+  }, [clearPDF])
 
   // Debounce timer refs for UI state
   const uiStateDebounceRef = useRef<NodeJS.Timeout | null>(null)

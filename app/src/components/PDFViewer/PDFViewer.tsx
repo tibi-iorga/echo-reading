@@ -406,7 +406,7 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
         className="flex-1 overflow-y-auto overflow-x-hidden relative min-h-0" 
         onMouseUp={handleTextSelection}
       >
-        <div className="flex justify-center px-4">
+        <div className="flex justify-center items-center min-h-full px-4">
           <Document
             file={pdf.url}
             onLoadSuccess={onDocumentLoadSuccess}

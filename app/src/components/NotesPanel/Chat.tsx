@@ -4,6 +4,8 @@ import { storageService } from '@/services/storage/storageService'
 import { sanitizeError } from '@/services/llm/errorSanitizer'
 import type { LLMMessage } from '@/types'
 import { renderMarkdown } from '@/utils/markdownRenderer'
+import { SelectionActions, type SelectionAction } from '@/components/SelectionActions/SelectionActions'
+import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
 
 interface Message {
   id: string
@@ -78,38 +80,55 @@ interface AssistantMessageProps {
 }
 
 function AssistantMessage({ content, onSaveInsight }: AssistantMessageProps) {
-  const [selectedText, setSelectedText] = useState<string>('')
+  const [selectionState, setSelectionState] = useState<{
+    text: string
+    position: { x: number; y: number }
+  } | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  const handleTextSelection = () => {
+  const handleTextSelection = useCallback(() => {
     const selection = window.getSelection()
-    if (selection && selection.toString().trim()) {
-      setSelectedText(selection.toString().trim())
-    } else {
-      setSelectedText('')
-    }
-  }
-
-  const handleSave = () => {
-    if (selectedText && onSaveInsight) {
-      onSaveInsight(selectedText)
-      setSelectedText('')
-      window.getSelection()?.removeAllRanges()
-    }
-  }
-
-  useEffect(() => {
-    const element = contentRef.current
-    if (element) {
-      element.addEventListener('mouseup', handleTextSelection)
-      return () => {
-        element.removeEventListener('mouseup', handleTextSelection)
+    if (selection && selection.toString().trim() && contentRef.current) {
+      const selectedText = selection.toString().trim()
+      const range = selection.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      const containerRect = containerRef.current?.getBoundingClientRect()
+      
+      if (containerRect) {
+        // Position the popup at the center of the selection, relative to the container
+        const x = rect.left + rect.width / 2 - containerRect.left
+        const y = rect.top - containerRect.top
+        
+        setSelectionState({
+          text: selectedText,
+          position: { x, y },
+        })
       }
+    } else {
+      setSelectionState(null)
     }
   }, [])
 
+  const handleSaveInsight = useCallback(() => {
+    if (selectionState?.text && onSaveInsight) {
+      onSaveInsight(selectionState.text)
+      setSelectionState(null)
+      window.getSelection()?.removeAllRanges()
+    }
+  }, [selectionState, onSaveInsight])
+
+  const handleCloseSelection = useCallback(() => {
+    setSelectionState(null)
+    window.getSelection()?.removeAllRanges()
+  }, [])
+
+  const actions: SelectionAction[] = onSaveInsight ? [
+    { id: 'saveInsight', label: 'Add to Highlights', onClick: handleSaveInsight },
+  ] : []
+
   return (
-    <div className="flex justify-start mb-4 px-4 group">
+    <div className="flex justify-start mb-4 px-4 group" ref={containerRef}>
       <div className="max-w-[80%] rounded-lg bg-gray-100 dark:bg-gray-800 px-4 py-2 relative">
         <div 
           ref={contentRef}
@@ -118,30 +137,15 @@ function AssistantMessage({ content, onSaveInsight }: AssistantMessageProps) {
         >
           {renderMarkdown(content)}
         </div>
-        {selectedText && (
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              className="text-xs px-2 py-1 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Save insight
-            </button>
-            <button
-              onClick={() => {
-                setSelectedText('')
-                window.getSelection()?.removeAllRanges()
-              }}
-              className="text-xs px-2 py-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              Cancel
-            </button>
-          </div>
+        {selectionState && actions.length > 0 && (
+          <SelectionActions
+            position={selectionState.position}
+            actions={actions}
+            onClose={handleCloseSelection}
+          />
         )}
       </div>
-      {!selectedText && (
+      {!selectionState && (
         <button
           onClick={() => {
             // Save full message directly
@@ -192,6 +196,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const commandsDropdownRef = useRef<HTMLDivElement>(null)
   const [isInputFocused, setIsInputFocused] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -554,14 +559,31 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       {messages.length > 0 && onClearChat && (
         <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <button
-            onClick={onClearChat}
-            className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-            title="Clear chat and start a new conversation"
+            onClick={() => setShowClearConfirm(true)}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            title="Clear chat"
           >
-            Clear chat
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
       )}
+
+      {/* Clear chat confirmation modal */}
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        title="Clear Chat"
+        message="Are you sure you want to clear all chat messages? This cannot be undone."
+        confirmText="Clear"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={() => {
+          setShowClearConfirm(false)
+          onClearChat?.()
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
       {/* Messages area */}
       <div className="flex-1 overflow-auto pt-4">
         {!hasApiKey && (
@@ -591,7 +613,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
           </div>
         )}
         {messages.length === 0 && hasApiKey && (
-          <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-8 px-4">
             <p className="text-sm">Explore the document deeper by asking questions,<br />or select text in the PDF to quote it and focus on specific passages.</p>
           </div>
         )}
@@ -615,7 +637,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       </div>
 
       {/* Input area */}
-      <div>
+      <div className="relative shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.06)]">
         {quotedText && (
           <QuotedMessage 
             text={quotedText} 
@@ -627,11 +649,11 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
           />
         )}
         {includePageContext && currentPageText && (
-          <div className="mx-4 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 rounded text-xs text-gray-600 dark:text-gray-300">
+          <div className="mx-4 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 text-xs text-gray-600 dark:text-gray-300">
             Page {currentPage || '?'} context will be included
           </div>
         )}
-        <div className="p-4">
+        <div className="px-4 pb-3 pt-2">
           <div className="mb-2 flex items-center gap-2">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input
@@ -639,21 +661,21 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                 checked={includePageContext}
                 onChange={(e) => setIncludePageContext(e.target.checked)}
                 disabled={!currentPageText || isLoading}
-                className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 bg-white dark:bg-gray-700"
+                className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
               />
-              <span>Include current page as context</span>
+              <span className="leading-none">Include current page as context</span>
             </label>
-            <div className="relative group">
+            <div className="relative group flex items-center">
               <button
                 type="button"
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                className="flex items-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
                 aria-label="Help"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </button>
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-10 pointer-events-none">
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-800 text-white text-xs shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-10 pointer-events-none">
                 <div className="text-gray-300">
                   When enabled, the full text content of the current page will be automatically included in your message. This helps the assistant understand the context of your question and provide more relevant answers based on what you're currently reading.
                 </div>
@@ -663,8 +685,10 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
               </div>
             </div>
           </div>
-          <div className="flex gap-2 relative">
-            <div className="flex-1 relative">
+          {/* Input bar */}
+          <div className="flex items-end border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-1 px-1.5">
+            {/* Textarea */}
+            <div className="flex-1 min-w-0 relative flex items-center min-h-[32px]">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -674,7 +698,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                 placeholder={hasApiKey ? (isInputFocused ? "Type / for quick actions" : "Ask anything") : "Configure API key in Settings to chat"}
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
-                className="flex-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-3 py-1 text-sm resize-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
                 rows={1}
                 disabled={isLoading || !hasApiKey}
               />
@@ -699,10 +723,12 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                 </div>
               )}
             </div>
+
+            {/* Send button */}
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading || !hasApiKey}
-              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex-shrink-0 h-8 px-3 flex items-center text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               Send
             </button>
