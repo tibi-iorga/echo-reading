@@ -61,3 +61,15 @@ body {
 .dark *::-webkit-scrollbar-thumb:hover {
   background-color: rgba(107, 114, 128, 0.5);
 }
+
+/* List items: avoid number on its own line when li contains a block (p).
+   list-outside puts the marker to the left; paragraphs inside li get minimal margin. */
+.markdown-renderer ol p,
+.markdown-renderer ul p {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+.markdown-renderer ol li:last-child p,
+.markdown-renderer ul li:last-child p {
+  margin-bottom: 0;
+}

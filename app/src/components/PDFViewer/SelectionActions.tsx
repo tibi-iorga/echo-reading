@@ -11,6 +11,7 @@ interface SelectionActionsProps {
 }
 
 export function SelectionActions({
+  selectedText,
   position,
   onHighlight,
   onSendToLLM,
@@ -18,11 +19,16 @@ export function SelectionActions({
   onWikipedia,
   onClose,
 }: SelectionActionsProps) {
+  const handleCopy = () => {
+    navigator.clipboard.writeText(selectedText).then(() => onClose())
+  }
+
   const actions: SelectionAction[] = [
     { id: 'highlight', label: 'Add to Highlights', onClick: onHighlight },
     { id: 'sendToChat', label: 'Send to Chat', onClick: onSendToLLM },
     { id: 'dictionary', label: 'Dictionary', onClick: onDictionary },
     { id: 'wikipedia', label: 'Search Wikipedia', onClick: onWikipedia },
+    { id: 'copy', label: 'Copy', onClick: handleCopy },
   ]
 
   return (

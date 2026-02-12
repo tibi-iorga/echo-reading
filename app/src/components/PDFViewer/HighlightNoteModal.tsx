@@ -94,10 +94,6 @@ export function HighlightNoteModal({
               Save Highlight
             </button>
           </div>
-
-          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-            Press <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100">Ctrl+Enter</kbd> to save, <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100">Esc</kbd> to cancel
-          </div>
         </div>
       </div>
     </div>

@@ -223,7 +223,7 @@ export function NotesPanel({
           {/* Expand button */}
           <button
             onClick={onToggleCollapsed}
-            className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors focus:outline-none"
             title="Expand panel"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,7 +238,7 @@ export function NotesPanel({
           {/* Chat icon */}
           <button
             onClick={() => handleIconClick('chat')}
-            className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+            className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
               activeTab === 'chat'
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -253,7 +253,7 @@ export function NotesPanel({
           {/* Notes icon */}
           <button
             onClick={() => handleIconClick('notes')}
-            className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+            className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
               activeTab === 'notes'
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -268,7 +268,7 @@ export function NotesPanel({
           {/* Settings icon */}
           <button
             onClick={() => handleIconClick('settings')}
-            className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+            className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
               activeTab === 'settings'
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -293,7 +293,7 @@ export function NotesPanel({
             role="tab"
             aria-selected={activeTab === 'chat'}
             onClick={() => setActiveTab('chat')}
-            className={`flex items-center justify-center gap-2 relative flex-shrink-0 ${
+            className={`flex items-center justify-center gap-2 relative flex-shrink-0 focus:outline-none ${
               useIconsOnly 
                 ? 'w-10 h-10 rounded' 
                 : 'px-2 py-1 text-sm font-medium h-[28px]'
@@ -320,7 +320,7 @@ export function NotesPanel({
             role="tab"
             aria-selected={activeTab === 'notes'}
             onClick={() => setActiveTab('notes')}
-            className={`flex items-center justify-center gap-2 relative flex-shrink-0 ${
+            className={`flex items-center justify-center gap-2 relative flex-shrink-0 focus:outline-none ${
               useIconsOnly 
                 ? 'w-10 h-10 rounded' 
                 : 'px-2 py-1 text-sm font-medium h-[28px]'
@@ -347,7 +347,7 @@ export function NotesPanel({
             role="tab"
             aria-selected={activeTab === 'settings'}
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center justify-center gap-2 relative flex-shrink-0 ${
+            className={`flex items-center justify-center gap-2 relative flex-shrink-0 focus:outline-none ${
               useIconsOnly 
                 ? 'w-10 h-10 rounded' 
                 : 'px-2 py-1 text-sm font-medium h-[28px]'
@@ -378,7 +378,7 @@ export function NotesPanel({
         {onToggleCollapsed && (
           <button
             onClick={onToggleCollapsed}
-            className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors flex-shrink-0"
+            className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors flex-shrink-0 focus:outline-none"
             title="Collapse panel"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -410,7 +410,7 @@ export function NotesPanel({
               {annotations.length > 0 && !hasSyncFile && isWarningDismissed && (
                 <button
                   onClick={handleRestoreWarning}
-                  className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200 transition-colors"
+                  className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200 transition-colors focus:outline-none"
                   aria-label="Show sync warning"
                   title="Your notes are not synced"
                 >
@@ -429,7 +429,7 @@ export function NotesPanel({
                   setEditingNote(null)
                   setShowNoteModal(true)
                 }}
-                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors focus:outline-none"
                 title="New Note"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -439,7 +439,7 @@ export function NotesPanel({
               <button
                 onClick={() => setShowExportPreview(true)}
                 disabled={annotations.length === 0}
-                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none"
                 title="Export"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

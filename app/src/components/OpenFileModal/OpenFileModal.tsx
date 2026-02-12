@@ -394,8 +394,8 @@ export function OpenFileModal({
               )}
 
               {selectedFileHandle && selectedFileName && (
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-400">
-                  Sync file: <span className="font-mono">{selectedFileName}</span>
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-400 min-w-0 overflow-hidden">
+                  Sync file: <span className="font-mono break-all">{selectedFileName}</span>
                 </div>
               )}
 

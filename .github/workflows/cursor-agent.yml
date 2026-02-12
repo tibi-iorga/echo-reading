@@ -1,0 +1,44 @@
+# Cursor CLI in GitHub Actions
+# https://cursor.com/docs/cli/github-actions
+# Add CURSOR_API_KEY in repo Settings > Secrets and variables > Actions
+
+name: Cursor Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Agent prompt'
+        required: true
+        default: 'Review the codebase and suggest small fixes or improvements.'
+  pull_request:
+    branches: [master]
+    types: [opened]
+
+jobs:
+  cursor:
+    name: Run Cursor Agent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Cursor CLI
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Run Cursor Agent
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          export PATH="$HOME/.cursor/bin:$PATH"
+          PROMPT="${{ github.event.inputs.prompt }}"
+          if [ -z "$PROMPT" ]; then
+            PROMPT="Review the pull request changes and suggest improvements. Do not commit or push."
+          fi
+          agent -p "$PROMPT" --model gpt-5.2

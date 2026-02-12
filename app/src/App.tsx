@@ -139,6 +139,7 @@ function App() {
   const handleHighlight = useCallback((text: string, pageNumber: number, note?: string, coordinates?: { x: number; y: number; width: number; height: number }) => {
     addHighlight({ pageNumber, text, coordinates }, note)
     setSelectedText(null)
+    setActiveTab('notes')
   }, [addHighlight])
 
   const handleNavigateToPage = useCallback(async (pageNumber: number, isManualForward: boolean = false) => {
@@ -770,6 +771,20 @@ function App() {
     onTogglePanel: () => {
       setIsPanelCollapsed(prev => !prev)
     },
+    onNavigateToTab: (tab) => {
+      if (activeTab === tab) {
+        if (isPanelCollapsed) {
+          setIsPanelCollapsed(false)
+        } else {
+          setIsPanelCollapsed(true)
+        }
+      } else {
+        setActiveTab(tab)
+        if (isPanelCollapsed) {
+          setIsPanelCollapsed(false)
+        }
+      }
+    },
     enabled: !!pdf,
   })
 
@@ -883,7 +898,10 @@ function App() {
           pageNumber={currentPage}
           numPages={numPages}
           onPageChange={handleToolbarPageChange}
-          onBookmark={() => addBookmark(currentPage)}
+          onBookmark={() => {
+            addBookmark(currentPage)
+            setActiveTab('notes')
+          }}
           isBookmarked={annotations.some((a) => a.type === 'bookmark' && a.pageNumber === currentPage)}
           scale={scale}
           onZoomIn={handleZoomIn}
@@ -914,7 +932,10 @@ function App() {
         )}
         <NotesPanel
           annotations={annotations}
-          onAddNote={addNote}
+          onAddNote={(content, pageNumber) => {
+            addNote(content, pageNumber)
+            setActiveTab('notes')
+          }}
           onRemoveAnnotation={removeAnnotation}
           onClearAll={clearAllAnnotations}
           onExport={handleExport}
@@ -923,7 +944,10 @@ function App() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           onNavigateToPage={handleNavigateToPage}
-          onUpdateHighlightNote={updateHighlightNote}
+          onUpdateHighlightNote={(id, note) => {
+            updateHighlightNote(id, note)
+            setActiveTab('notes')
+          }}
           chatMessages={chatMessages}
           onChatMessagesChange={setChatMessages}
           documentMetadata={documentMetadata}

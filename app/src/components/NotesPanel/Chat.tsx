@@ -3,7 +3,7 @@ import { llmService } from '@/services/llm/llmService'
 import { storageService } from '@/services/storage/storageService'
 import { sanitizeError } from '@/services/llm/errorSanitizer'
 import type { LLMMessage } from '@/types'
-import { renderMarkdown } from '@/utils/markdownRenderer'
+import { MarkdownRenderer } from '@/utils/markdownRenderer'
 import { SelectionActions, type SelectionAction } from '@/components/SelectionActions/SelectionActions'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
 
@@ -110,6 +110,14 @@ function AssistantMessage({ content, onSaveInsight }: AssistantMessageProps) {
     }
   }, [])
 
+  const handleCopy = useCallback(async () => {
+    if (selectionState?.text) {
+      await navigator.clipboard.writeText(selectionState.text)
+      setSelectionState(null)
+      window.getSelection()?.removeAllRanges()
+    }
+  }, [selectionState])
+
   const handleSaveInsight = useCallback(() => {
     if (selectionState?.text && onSaveInsight) {
       onSaveInsight(selectionState.text)
@@ -123,21 +131,22 @@ function AssistantMessage({ content, onSaveInsight }: AssistantMessageProps) {
     window.getSelection()?.removeAllRanges()
   }, [])
 
-  const actions: SelectionAction[] = onSaveInsight ? [
-    { id: 'saveInsight', label: 'Add to Highlights', onClick: handleSaveInsight },
-  ] : []
+  const actions: SelectionAction[] = [
+    { id: 'copy', label: 'Copy', onClick: handleCopy },
+    ...(onSaveInsight ? [{ id: 'saveInsight', label: 'Add to Highlights', onClick: handleSaveInsight }] : []),
+  ]
 
   return (
     <div className="flex justify-start mb-4 px-4 group" ref={containerRef}>
       <div className="max-w-[80%] rounded-lg bg-gray-100 dark:bg-gray-800 px-4 py-2 relative">
         <div 
           ref={contentRef}
-          className="whitespace-pre-wrap break-words select-text text-gray-900 dark:text-gray-100"
+          className="break-words select-text text-gray-900 dark:text-gray-100 [&>*]:first:mt-0 [&>*]:last:mb-0"
           onMouseUp={handleTextSelection}
         >
-          {renderMarkdown(content)}
+          <MarkdownRenderer content={content} />
         </div>
-        {selectionState && actions.length > 0 && (
+        {selectionState && (
           <SelectionActions
             position={selectionState.position}
             actions={actions}

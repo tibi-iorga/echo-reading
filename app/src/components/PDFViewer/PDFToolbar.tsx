@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
+import { ShortcutsModal } from '@/components/ShortcutsModal/ShortcutsModal'
 
 interface PDFToolbarProps {
   // Document controls
@@ -53,6 +54,7 @@ export function PDFToolbar({
   const [pageInputValue, setPageInputValue] = useState(pageNumber.toString())
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showSyncMenu, setShowSyncMenu] = useState(false)
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const syncMenuRef = useRef<HTMLDivElement>(null)
 
@@ -308,7 +310,24 @@ export function PDFToolbar({
             )}
           </button>
         )}
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+
+        {/* Shortcuts */}
+        <button
+          onClick={() => setShowShortcutsModal(true)}
+          className={`${iconButtonClass} focus:outline-none`}
+          title="Keyboard shortcuts"
+        >
+          <span className="text-base font-semibold text-gray-600 dark:text-gray-400">?</span>
+        </button>
       </div>
+
+      <ShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
 
       {/* Close Confirmation Modal */}
       <ConfirmModal

@@ -19,9 +19,14 @@ export async function waitForPDFLoad(page: Page) {
 }
 
 export async function navigateToSettings(page: Page) {
+  // If panel is collapsed, expand it first (collapsed view has no role="tab")
+  const expandButton = page.getByRole('button', { name: /expand panel/i })
+  if (await expandButton.isVisible().catch(() => false)) {
+    await expandButton.click()
+    await page.waitForTimeout(300)
+  }
   // Wait for NotesPanel tabs to be visible (wait for any tab first to ensure panel is rendered)
   await page.getByRole('tab').first().waitFor({ state: 'visible', timeout: 10000 })
-  
   // Now find and click Settings tab
   const settingsTab = page.getByRole('tab', { name: /settings/i })
   await settingsTab.click()
@@ -29,20 +34,24 @@ export async function navigateToSettings(page: Page) {
 }
 
 export async function navigateToChat(page: Page) {
-  // Wait for NotesPanel tabs to be visible
+  const expandButton = page.getByRole('button', { name: /expand panel/i })
+  if (await expandButton.isVisible().catch(() => false)) {
+    await expandButton.click()
+    await page.waitForTimeout(300)
+  }
   await page.getByRole('tab').first().waitFor({ state: 'visible', timeout: 10000 })
-  
-  // Now find and click Chat tab
   const chatTab = page.getByRole('tab', { name: /chat/i })
   await chatTab.click()
   await page.waitForTimeout(500)
 }
 
 export async function navigateToNotes(page: Page) {
-  // Wait for NotesPanel tabs to be visible
+  const expandButton = page.getByRole('button', { name: /expand panel/i })
+  if (await expandButton.isVisible().catch(() => false)) {
+    await expandButton.click()
+    await page.waitForTimeout(300)
+  }
   await page.getByRole('tab').first().waitFor({ state: 'visible', timeout: 10000 })
-  
-  // Now find and click Notes tab
   const notesTab = page.getByRole('tab', { name: /notes/i })
   await notesTab.click()
   await page.waitForTimeout(500)

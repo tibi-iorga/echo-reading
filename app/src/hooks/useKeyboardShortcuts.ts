@@ -1,10 +1,13 @@
 import { useEffect, useCallback } from 'react'
 
+export type TabKey = 'chat' | 'notes' | 'settings'
+
 interface KeyboardShortcutsOptions {
   onNextPage?: () => void
   onPreviousPage?: () => void
   onCloseSelection?: () => void
   onTogglePanel?: () => void
+  onNavigateToTab?: (tab: TabKey) => void
   enabled?: boolean
 }
 
@@ -13,6 +16,7 @@ export function useKeyboardShortcuts({
   onPreviousPage,
   onCloseSelection,
   onTogglePanel,
+  onNavigateToTab,
   enabled = true,
 }: KeyboardShortcutsOptions) {
   const handleKeyDown = useCallback(
@@ -51,8 +55,22 @@ export function useKeyboardShortcuts({
         e.preventDefault()
         onTogglePanel?.()
       }
+
+      // C/N/S: navigate to Chat, Notes, Settings (only when focus is not in an editable field)
+      if (onNavigateToTab && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'c') {
+          e.preventDefault()
+          onNavigateToTab('chat')
+        } else if (e.key === 'n') {
+          e.preventDefault()
+          onNavigateToTab('notes')
+        } else if (e.key === 's') {
+          e.preventDefault()
+          onNavigateToTab('settings')
+        }
+      }
     },
-    [enabled, onNextPage, onPreviousPage, onCloseSelection, onTogglePanel]
+    [enabled, onNextPage, onPreviousPage, onCloseSelection, onTogglePanel, onNavigateToTab]
   )
 
   useEffect(() => {
