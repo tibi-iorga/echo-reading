@@ -233,6 +233,30 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfId]) // Only reload when pdfId changes, not when documentMetadata changes
 
+  // Refresh sync file state when the sync file changes externally (e.g. set via OpenFileModal)
+  useEffect(() => {
+    const handleSyncFileChanged = async () => {
+      const fileName = fileSyncService.getSyncFileName()
+      setSyncFileName(fileName)
+      
+      if (fileName && fileSyncService.hasSyncFile()) {
+        try {
+          const time = await fileSyncService.getLastModifiedTime()
+          setLastUpdated(time)
+        } catch {
+          setLastUpdated(null)
+        }
+      } else {
+        setLastUpdated(null)
+      }
+    }
+
+    window.addEventListener('syncFileChanged', handleSyncFileChanged)
+    return () => {
+      window.removeEventListener('syncFileChanged', handleSyncFileChanged)
+    }
+  }, [])
+
   // Separate effect for periodic refresh of last modified time (every 5 seconds)
   useEffect(() => {
     const updateLastModified = async () => {

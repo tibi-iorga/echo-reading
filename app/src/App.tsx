@@ -272,15 +272,13 @@ function App() {
       if (fileHandle && fileName) {
         await fileSyncService.setSyncFile(fileHandle, fileName)
         
-        // Load page data from sync file (source of truth) and update state/localStorage
+        // Load all data from sync file (source of truth) and update state/localStorage
         isLoadingFromSyncFileRef.current = true
         try {
           const syncData = await fileSyncService.readSyncData()
           
-          // Sync file is source of truth - force load furthestPage and lastPageRead from sync file
-          // Use force=true to override localStorage values (sync file takes precedence)
+          // Sync file is source of truth for page progress
           if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
-            // Don't sync back to file here - just update localStorage
             localStorage.setItem(`pdf_furthest_page_${pdfId}`, syncData.furthestPage.toString())
             setFurthestPage(syncData.furthestPage)
           }
@@ -288,40 +286,50 @@ function App() {
           if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
             await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
             setLastPageRead(syncData.lastPageRead)
-            // Navigate to last page read from sync file (override any localStorage value)
-            // Not manual forward navigation (loading from sync file)
             isManualForwardNavigationRef.current = false
             setCurrentPage(syncData.lastPageRead)
           }
           
-          // Save metadata to sync file (source of truth) - preserve page values from sync file
+          // Determine the canonical annotations: imported takes priority, then sync file content
+          const sourceAnnotations = importedAnnotations.length > 0
+            ? importedAnnotations
+            : syncData.annotations
+          
+          // Write back to sync file with updated metadata
           await fileSyncService.writeSyncData({
             ...syncData,
             metadata,
-            annotations: importedAnnotations.length > 0 ? importedAnnotations : syncData.annotations,
+            annotations: sourceAnnotations,
             furthestPage: syncData.furthestPage ?? null,
             lastPageRead: syncData.lastPageRead ?? null
           })
+          
+          // Sync file is source of truth for annotations: always replace localStorage
+          // and reload, even if the sync file is empty. This ensures stale local
+          // annotations from a previous session or a different book are cleared.
+          await storageService.saveAnnotations(pdfId, sourceAnnotations)
+          reloadAnnotations()
         } catch (error) {
           console.warn('Failed to load from sync file:', error)
+          // If sync file read failed but we have imported annotations, use those
+          if (importedAnnotations.length > 0) {
+            await storageService.saveAnnotations(pdfId, importedAnnotations)
+            reloadAnnotations()
+          }
         } finally {
-          // Reset flag after a delay to allow state updates to complete
           setTimeout(() => {
             isLoadingFromSyncFileRef.current = false
           }, 1000)
         }
-        
-        // Import annotations if provided
-        if (importedAnnotations.length > 0) {
-          await storageService.saveAnnotations(pdfId, importedAnnotations)
-          reloadAnnotations()
-        }
-      } else {
-        // No sync file selected - user skipped
-        // Still save metadata to localStorage
-      }
       
-      setShowOpenFileModal(false)
+      // Notify other components (e.g. SettingsPanel) that the sync file changed
+      window.dispatchEvent(new CustomEvent('syncFileChanged'))
+    } else {
+      // No sync file selected - user skipped
+      // Still save metadata to localStorage
+    }
+    
+    setShowOpenFileModal(false)
     }
   }, [pdf, reloadAnnotations])
 
@@ -418,6 +426,10 @@ function App() {
       setScale(1.5)
       setFurthestPage(null)
       setLastPageRead(null)
+      // Clear sync file handle to prevent stale data from the previous book
+      // bleeding into the next book opened. The sync file will be re-selected
+      // by the user in the OpenFileModal when the next book is opened.
+      fileSyncService.clearSyncFile().catch(console.error)
     }
   }, [pdfId])
 
