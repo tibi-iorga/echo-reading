@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { Page, expect } from '@playwright/test'
 
 /**
@@ -5,12 +6,13 @@ import { Page, expect } from '@playwright/test'
  */
 
 export async function uploadPDF(page: Page, pdfPath: string) {
+  const resolvedPath = path.isAbsolute(pdfPath) ? pdfPath : path.resolve(process.cwd(), pdfPath)
   const fileInput = page.locator('input[type="file"]')
-  await fileInput.setInputFiles(pdfPath)
-  
-  // Wait for PDF to load (check for PDF viewer elements)
-  await page.waitForTimeout(2000) // Give PDF.js time to render
+  await fileInput.setInputFiles(resolvedPath)
+  await page.waitForTimeout(2000)
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 10000 })
+  // Open File modal appears after 500ms; allow it to show before tests interact
+  await page.waitForTimeout(1200)
 }
 
 export async function waitForPDFLoad(page: Page) {
@@ -18,22 +20,51 @@ export async function waitForPDFLoad(page: Page) {
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 10000 })
 }
 
+/** Dismiss or complete Open File modal if it appears (e.g. after PDF load). Prefer completing via Skip Notes so app has title/author. */
+export async function dismissOpenFileModalIfPresent(page: Page) {
+  try {
+    const skipNotesBtn = page.getByRole('button', { name: /skip notes/i }).first()
+    await skipNotesBtn.waitFor({ state: 'visible', timeout: 8000 })
+    await skipNotesBtn.click()
+    await page.waitForTimeout(400)
+    const titleInput = page.getByPlaceholder(/title|document/i).first()
+    await titleInput.waitFor({ state: 'visible', timeout: 3000 })
+    await titleInput.fill('E2E Test Doc')
+    await page.getByPlaceholder(/author/i).first().fill('E2E Test')
+    await page.waitForTimeout(200)
+    await page.getByRole('button', { name: /continue|finish/i }).first().click()
+    await page.waitForTimeout(400)
+    const proceedBtn = page.getByRole('button', { name: /proceed without syncing/i }).first()
+    if (await proceedBtn.isVisible().catch(() => false)) {
+      await proceedBtn.click()
+    }
+  } catch {
+    try {
+      const cancelBtn = page.getByRole('button', { name: /cancel/i }).first()
+      await cancelBtn.waitFor({ state: 'visible', timeout: 2000 })
+      await cancelBtn.click()
+    } catch {
+      // Modal not present or already closed
+    }
+  }
+  await page.waitForTimeout(500)
+}
+
 export async function navigateToSettings(page: Page) {
-  // If panel is collapsed, expand it first (collapsed view has no role="tab")
+  await dismissOpenFileModalIfPresent(page)
   const expandButton = page.getByRole('button', { name: /expand panel/i })
   if (await expandButton.isVisible().catch(() => false)) {
     await expandButton.click()
     await page.waitForTimeout(300)
   }
-  // Wait for NotesPanel tabs to be visible (wait for any tab first to ensure panel is rendered)
   await page.getByRole('tab').first().waitFor({ state: 'visible', timeout: 10000 })
-  // Now find and click Settings tab
   const settingsTab = page.getByRole('tab', { name: /settings/i })
   await settingsTab.click()
-  await page.waitForTimeout(500) // Wait for tab switch
+  await page.waitForTimeout(500)
 }
 
 export async function navigateToChat(page: Page) {
+  await dismissOpenFileModalIfPresent(page)
   const expandButton = page.getByRole('button', { name: /expand panel/i })
   if (await expandButton.isVisible().catch(() => false)) {
     await expandButton.click()
@@ -46,6 +77,7 @@ export async function navigateToChat(page: Page) {
 }
 
 export async function navigateToNotes(page: Page) {
+  await dismissOpenFileModalIfPresent(page)
   const expandButton = page.getByRole('button', { name: /expand panel/i })
   if (await expandButton.isVisible().catch(() => false)) {
     await expandButton.click()

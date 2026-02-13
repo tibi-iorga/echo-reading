@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { navigateToSettings, addAPIKey, navigateToChat } from './helpers/test-helpers'
+import { navigateToSettings, addAPIKey, navigateToChat, uploadPDF, waitForPDFLoad } from './helpers/test-helpers'
 import { setupLLMMock, setupBadAPIKeyMock } from './helpers/api-mocks'
 
 test.describe('LLM Integration', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
   })
   
   test('should add and test API key', async ({ page }) => {

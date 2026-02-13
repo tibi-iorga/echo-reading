@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { navigateToSettings, addAPIKey, navigateToChat } from './helpers/test-helpers'
+import { navigateToSettings, addAPIKey, navigateToChat, uploadPDF, waitForPDFLoad } from './helpers/test-helpers'
 import { setupBadAPIKeyMock } from './helpers/api-mocks'
 
 test.describe('Error Handling', () => {
@@ -64,7 +64,9 @@ test.describe('Error Handling', () => {
   
   test('should reject invalid API keys', async ({ page }) => {
     setupBadAPIKeyMock(page)
-    
+    await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
     await navigateToSettings(page)
     
     // Try to add invalid API key
@@ -83,11 +85,12 @@ test.describe('Error Handling', () => {
   })
   
   test('should handle network errors when calling LLM', async ({ page }) => {
-    // Mock network failure
     await page.route('https://api.openai.com/v1/**', async (route) => {
       await route.abort('failed')
     })
-    
+    await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
     await navigateToSettings(page)
     await addAPIKey(page, 'test-api-key')
     
@@ -105,6 +108,9 @@ test.describe('Error Handling', () => {
   })
   
   test('should handle empty API key', async ({ page }) => {
+    await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
     await navigateToSettings(page)
     
     // Try to test connection with empty API key
@@ -134,8 +140,9 @@ test.describe('Error Handling', () => {
   })
   
   test('should handle missing sync file gracefully', async ({ page }) => {
-    // If sync file is deleted externally, app should handle it
-    
+    await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
     await navigateToSettings(page)
     
     // Look for sync file status

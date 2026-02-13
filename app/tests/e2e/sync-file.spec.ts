@@ -1,17 +1,14 @@
 import { test, expect } from '@playwright/test'
-import { navigateToSettings } from './helpers/test-helpers'
+import { navigateToSettings, uploadPDF, waitForPDFLoad } from './helpers/test-helpers'
 
 test.describe('Sync File Operations', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
   })
   
   test('should create new sync file', async ({ page }) => {
-    // Upload PDF first
-    // TODO: When PDF is available
-    // await uploadPDF(page, './tests/fixtures/test-text.pdf')
-    // await waitForPDFLoad(page)
-    
     await navigateToSettings(page)
     
     // Look for sync file section
@@ -55,13 +52,6 @@ test.describe('Sync File Operations', () => {
   })
   
   test('should export annotations to sync file', async ({ page }) => {
-    // Upload PDF and create annotations
-    // TODO: When PDF is available
-    // await uploadPDF(page, './tests/fixtures/test-text.pdf')
-    // await waitForPDFLoad(page)
-    // await selectTextInPDF(page)
-    // Create highlight, add comment, etc.
-    
     await navigateToSettings(page)
     
     // Look for export/save sync file button

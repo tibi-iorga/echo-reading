@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { navigateToSettings, addAPIKey, navigateToChat, exportNotes } from './helpers/test-helpers'
+import { navigateToSettings, addAPIKey, navigateToChat, exportNotes, uploadPDF, waitForPDFLoad } from './helpers/test-helpers'
 import { setupLLMMock } from './helpers/api-mocks'
 
 test.describe('Happy Path - Complete User Flow', () => {
@@ -12,19 +12,10 @@ test.describe('Happy Path - Complete User Flow', () => {
     // Step 1: Upload PDF
     await page.goto('/')
     await expect(page.getByRole('heading', { name: /Echo/i })).toBeVisible()
+    await uploadPDF(page, './tests/fixtures/test-text.pdf')
+    await waitForPDFLoad(page)
     
-    // Note: This test requires a test PDF file in tests/fixtures/
-    // For now, we'll test the flow structure
-    
-    // TODO: Uncomment when test PDF is available
-    // const fileInput = page.locator('input[type="file"]')
-    // await uploadPDF(page, './tests/fixtures/test-text.pdf')
-    // await waitForPDFLoad(page)
-    
-    // Step 2: Create or select sync file (modal should appear after PDF load)
-    // This would happen automatically after PDF upload
-    // For now, we'll test the structure
-    
+    // Step 2: Create or select sync file (modal may appear after PDF load)
     // Step 3: Add API key in settings
     await navigateToSettings(page)
     await addAPIKey(page, 'test-api-key-12345')
