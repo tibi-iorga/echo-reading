@@ -5,6 +5,19 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-13
+
+### Added
+- Keyboard shortcut for common actions
+- Copy option when text is selected in chat and document view ([#2](https://github.com/tibi-iorga/echo-reading/issues/2))
+
+### Fixed
+- Chat assistant responses now render markdown correctly (headings, numbered lists) ([#1](https://github.com/tibi-iorga/echo-reading/issues/1))
+
+### Changed
+- Chat markdown rendering now uses react-markdown library for proper formatting (replaces custom renderer)
+- E2E tests and Playwright config updates
+
 ## [0.3.0] - 2026-02-07
 
 ### Added
