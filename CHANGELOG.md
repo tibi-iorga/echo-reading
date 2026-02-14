@@ -5,6 +5,27 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-14
+
+### Added
+- Multi-provider LLM support: Choose between OpenAI and Anthropic Claude in Settings
+- Dynamic model fetching: Available models are now fetched from APIs instead of using hardcoded lists
+- Provider selection dropdown with auto-save functionality
+- CORS support for Anthropic Claude API direct browser access
+- Automatic API key clearing when switching providers for better UX
+
+### Changed
+- Updated Settings UI to be provider-agnostic with dynamic API key links
+- Chat warning messages now reference "API key" instead of "OpenAI API key"
+- Provider selection is now saved immediately when changed (no Save button required)
+- Improved model selection logic with intelligent defaults based on availability
+
+### Technical
+- Added `fetchAvailableModels` method to LLM provider interface
+- Enhanced LLM service architecture to support multiple providers seamlessly
+- Added proper TypeScript types for dynamic model fetching
+- Implemented fallback model lists for offline/error scenarios
+
 ## [0.3.2] - 2026-02-13
 
 ### Fixed
