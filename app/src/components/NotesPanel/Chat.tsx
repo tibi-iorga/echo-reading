@@ -606,7 +606,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                   API Key Required
                 </h3>
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-2">
-                  Please configure your OpenAI API key in Settings to use the chat feature.
+                  Please configure your API key in Settings to use the chat feature.
                 </p>
                 <button
                   onClick={() => {

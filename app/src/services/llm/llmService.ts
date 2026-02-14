@@ -1,5 +1,5 @@
 import type { LLMProvider } from '@/types'
-import { OpenAIProvider, type TestConnectionResult } from './providers'
+import { OpenAIProvider, AnthropicProvider, type TestConnectionResult } from './providers'
 
 // Extended provider interface with testConnection
 interface ExtendedLLMProvider extends LLMProvider {
@@ -12,6 +12,7 @@ class LLMService {
 
   constructor() {
     this.registerProvider(new OpenAIProvider())
+    this.registerProvider(new AnthropicProvider())
     this.currentProvider = this.providers.get('OpenAI') || null
   }
 

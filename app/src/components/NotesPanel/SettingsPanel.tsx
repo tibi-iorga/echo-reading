@@ -54,6 +54,7 @@ function formatRelativeTime(date: Date): string {
 export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfId, onReloadAnnotations, expandSyncFileSection, onSyncFileSectionExpanded }: SettingsPanelProps = {}) {
   const { theme, toggleTheme } = useTheme()
   const [apiKey, setApiKey] = useState('')
+  const [selectedProvider, setSelectedProvider] = useState('OpenAI')
   const [selectedModel, setSelectedModel] = useState('')
   const [chatInstructions, setChatInstructions] = useState('')
   const [docTitle, setDocTitle] = useState('')
@@ -112,6 +113,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   
   // Track saved values to detect unsaved changes
   const [savedApiKey, setSavedApiKey] = useState('')
+  const [savedProvider, setSavedProvider] = useState('OpenAI')
   const [savedModel, setSavedModel] = useState('')
   const [savedChatInstructions, setSavedChatInstructions] = useState('')
   const [savedDocTitle, setSavedDocTitle] = useState('')
@@ -161,8 +163,12 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
         }
       }
       
-      // Always use OpenAI as the provider
-      llmService.setProvider('OpenAI')
+      // Load stored provider or default to OpenAI
+      const storedProvider = storageService.getProvider() || 'OpenAI'
+      setSelectedProvider(storedProvider)
+      setSavedProvider(storedProvider)
+      llmService.setProvider(storedProvider)
+      
       const currentProvider = llmService.getCurrentProvider()
       const defaultModel = currentProvider?.getDefaultModel() || 'gpt-4o'
       const availableModels = currentProvider?.getAvailableModels() || []
@@ -307,8 +313,9 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
   // Check unsaved changes per section
   const hasUnsavedLLMChanges = () => {
     const apiKeyChanged = apiKey.trim() !== savedApiKey
+    const providerChanged = selectedProvider !== savedProvider
     const modelChanged = selectedModel !== savedModel
-    return apiKeyChanged || modelChanged
+    return apiKeyChanged || providerChanged || modelChanged
   }
 
 
@@ -338,19 +345,40 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       await storageService.setApiKey(apiKey.trim())
       setSavedApiKey(apiKey.trim())
       
-      // Save model
+      // Save model and provider
       storageService.setModel(selectedModel)
+      storageService.setProvider(selectedProvider)
       setSavedModel(selectedModel)
+      setSavedProvider(selectedProvider)
       
-      // Always use OpenAI as the provider
-      llmService.setProvider('OpenAI')
+      // Set the selected provider
+      llmService.setProvider(selectedProvider)
       
-      // Auto test connection after saving
+      // Auto test connection and fetch models after saving
       setConnectionStatus('testing')
       try {
+        // First test connection
         const result = await llmService.testConnection(apiKey.trim())
         if (result.success) {
           setConnectionStatus('connected')
+          
+          // Then fetch available models if supported
+          const currentProvider = llmService.getCurrentProvider()
+          if (currentProvider?.fetchAvailableModels) {
+            try {
+              await currentProvider.fetchAvailableModels(apiKey.trim())
+              // Update selected model if current one is no longer available
+              const availableModels = currentProvider.getAvailableModels()
+              if (!availableModels.includes(selectedModel)) {
+                const defaultModel = currentProvider.getDefaultModel()
+                setSelectedModel(defaultModel)
+                storageService.setModel(defaultModel)
+                setSavedModel(defaultModel)
+              }
+            } catch (error) {
+              console.warn('Failed to fetch models, using fallback list')
+            }
+          }
         } else {
           setConnectionStatus('failed')
           setConnectionError(result.message)
@@ -365,12 +393,14 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       setSavedApiKey('')
       setConnectionStatus('untested')
       
-      // Save model
+      // Save model and provider
       storageService.setModel(selectedModel)
+      storageService.setProvider(selectedProvider)
       setSavedModel(selectedModel)
+      setSavedProvider(selectedProvider)
       
-      // Always use OpenAI as the provider
-      llmService.setProvider('OpenAI')
+      // Set the selected provider
+      llmService.setProvider(selectedProvider)
     }
     
     // Dispatch event if API key status changed (added or removed)
@@ -755,7 +785,7 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           {/* Privacy explanation */}
           <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Your API key stays on this device and is sent only to OpenAI when you ask a question. 
+              Your API key stays on this device and is sent only to the selected provider when you ask a question. 
               We have no server, so we never receive or store your key.
             </p>
           </div>
@@ -768,6 +798,41 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
               </p>
             </div>
           )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              AI Provider
+            </label>
+            <select
+              value={selectedProvider}
+              onChange={(e) => {
+                const newProvider = e.target.value
+                setSelectedProvider(newProvider)
+                setSavedProvider(newProvider)
+                llmService.setProvider(newProvider)
+                storageService.setProvider(newProvider)
+                // Clear API key when switching providers
+                setApiKey('')
+                // Update available models for the new provider
+                const currentProvider = llmService.getCurrentProvider()
+                const defaultModel = currentProvider?.getDefaultModel() || ''
+                setSelectedModel(defaultModel)
+                setSavedModel(defaultModel)
+                storageService.setModel(defaultModel)
+                // Reset connection status when provider changes
+                setConnectionStatus('untested')
+                setConnectionError(null)
+              }}
+              className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none bg-no-repeat bg-right"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundSize: '1.25rem', backgroundPosition: 'right 0.5rem center' }}
+            >
+              {llmService.getAvailableProviders().map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+          </div>
           
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -825,12 +890,12 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
               <a
-                href="https://platform.openai.com/api-keys"
+                href={selectedProvider === 'OpenAI' ? 'https://platform.openai.com/api-keys' : 'https://console.anthropic.com/settings/keys'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-500 dark:text-blue-400 hover:underline"
               >
-                Get your API key from OpenAI
+                Get your API key from {selectedProvider}
               </a>
             </p>
           </div>
