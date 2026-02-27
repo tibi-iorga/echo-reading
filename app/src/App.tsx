@@ -502,7 +502,7 @@ function App() {
     return () => {
       window.removeEventListener('syncFileChanged', handleSyncFileChanged)
     }
-  }, [pdfId])
+  }, [pdfId, reloadCanvas])
 
   // Show OpenFileModal when PDF loads - sync file is source of truth
   useEffect(() => {
