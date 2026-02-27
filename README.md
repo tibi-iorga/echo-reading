@@ -2,14 +2,14 @@
 
 Echo is an AI reading companion that lets you open a PDF, read it, annotate it, and send content to an LLM without context switching.
 
-![Echo demo](assets/demo.gif)
-
 ## What it does
 
 - **PDF reader** with search, bookmarks, page navigation, and zoom
 - **Annotations** for highlights, comments, and free form notes
-- **LLM integration** (OpenAI) so you can chat about the document without copy pasting content
-- **Export** annotations and notes to Markdown, PDF or TXT
+- **Canvas** — a writing tab to compose structured thinking alongside your reading, with `/notes` to pull in highlights
+- **LLM integration** (OpenAI, Anthropic) so you can chat about the document without copy pasting content
+- **Export** annotations, notes, and canvas content to Markdown, PDF or TXT
+- **Sync** your reading progress, annotations, and canvas writing across browsers via a sync file
 
 All data stays on your device. PDFs are loaded from your filesystem; annotations and settings are stored locally (and optionally synced to a file you choose). Your API key is stored encrypted in the browser and sent only to the provider you configure.
 
