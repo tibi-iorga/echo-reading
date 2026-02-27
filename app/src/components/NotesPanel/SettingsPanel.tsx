@@ -143,10 +143,16 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       // Check fallback mode
       setIsInFallbackMode(storageService.isApiKeyInFallbackMode())
       
+      // Load stored provider or default to OpenAI (must happen before connection test)
+      const storedProvider = storageService.getProvider() || 'OpenAI'
+      setSelectedProvider(storedProvider)
+      setSavedProvider(storedProvider)
+      llmService.setProvider(storedProvider)
+
       if (storedKey) {
         setApiKey(storedKey)
         setSavedApiKey(storedKey)
-        
+
         // Test connection on load
         setConnectionStatus('testing')
         try {
@@ -162,12 +168,6 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
           setConnectionError(error instanceof Error ? error.message : 'Connection test failed')
         }
       }
-      
-      // Load stored provider or default to OpenAI
-      const storedProvider = storageService.getProvider() || 'OpenAI'
-      setSelectedProvider(storedProvider)
-      setSavedProvider(storedProvider)
-      llmService.setProvider(storedProvider)
       
       const currentProvider = llmService.getCurrentProvider()
       const defaultModel = currentProvider?.getDefaultModel() || 'gpt-4o'
@@ -640,17 +640,19 @@ export function SettingsPanel({ documentMetadata, onDocumentMetadataChange, pdfI
       await fileSyncService.setSyncFile(fileHandle, fileName)
       setSyncFileName(fileName)
       
-      // Get current annotations, page data, and metadata from storage and write them to the new file
+      // Get current annotations, page data, metadata, and canvas content from storage and write them to the new file
       const currentAnnotations = storageService.getAnnotations(pdfId)
       const furthestPage = storageService.getFurthestPage(pdfId)
       const lastPageRead = storageService.getLastPageRead(pdfId)
       const currentMetadata = documentMetadata || storageService.getDocumentMetadata(pdfId) || { title: '', author: null }
-      
+      const canvasContent = storageService.getCanvasContent(pdfId) || null
+
       await fileSyncService.writeSyncData({
         annotations: currentAnnotations,
         furthestPage,
         lastPageRead,
-        metadata: currentMetadata
+        metadata: currentMetadata,
+        canvasContent
       })
       
       // Update last modified time after writing

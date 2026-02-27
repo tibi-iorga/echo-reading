@@ -92,7 +92,7 @@ export function useAnnotations(pdfId: string | null) {
     })
   }, [pdfId])
 
-  const addBookmark = useCallback((pageNumber: number) => {
+  const addBookmark = useCallback((pageNumber: number, pageText?: string) => {
     setAnnotations((prev) => {
       // Check if bookmark already exists for this page
       const existingBookmark = prev.find(
@@ -111,6 +111,7 @@ export function useAnnotations(pdfId: string | null) {
         id: `bookmark_${Date.now()}`,
         type: 'bookmark',
         pageNumber,
+        ...(pageText ? { pageText } : {}),
         createdAt: new Date(),
       }
       const updated = [...prev, bookmark]

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Annotation } from '@/types'
+import { MarkdownRenderer } from '@/utils/markdownRenderer'
 
 interface AnnotationListProps {
   annotations: Annotation[]
@@ -225,9 +226,13 @@ export function AnnotationList({ annotations, filterType = 'all', onRemove, onNa
           {/* Body */}
           {annotation.type === 'highlight' && (
             <div>
-              <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
-                {annotation.text}
-              </p>
+              {annotation.pageNumber === 0 ? (
+                <MarkdownRenderer content={annotation.text} className="text-base text-gray-800 dark:text-gray-200" />
+              ) : (
+                <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed">
+                  {annotation.text}
+                </p>
+              )}
               {editingNoteId === annotation.id ? (
                 <div className="mt-3 pt-3 border-t border-t-gray-200 dark:border-t-gray-700/50" onClick={(e) => e.stopPropagation()}>
                   <textarea
@@ -271,13 +276,13 @@ export function AnnotationList({ annotations, filterType = 'all', onRemove, onNa
           )}
 
           {annotation.type === 'note' && (
-            <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+            <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
               {annotation.content}
             </p>
           )}
 
           {annotation.type === 'bookmark' && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-base text-gray-500 dark:text-gray-400">
               Bookmarked page
             </p>
           )}

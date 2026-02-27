@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 
 interface HighlightNoteModalProps {
   isOpen: boolean
+  highlightedText?: string
   onSave: (note: string | undefined) => void
   onCancel: () => void
 }
 
 export function HighlightNoteModal({
   isOpen,
+  highlightedText,
   onSave,
   onCancel,
 }: HighlightNoteModalProps) {
@@ -57,6 +59,14 @@ export function HighlightNoteModal({
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Add an optional note to this highlight. Leave blank to create a highlight without a note.
           </p>
+
+          {highlightedText && (
+            <div className="mb-4 max-h-32 overflow-y-auto border-l-4 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-r px-3 py-2">
+              <p className="text-sm italic text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                "{highlightedText}"
+              </p>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>

@@ -253,10 +253,15 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
         rects: rects, // Store individual rectangles for accurate multi-line rendering
       }
       
-      // Position for the selection actions popup (relative to container)
+      // Position for the selection actions popup (relative to scrollable container's content)
+      // We need to account for scroll offset since the popup is absolutely positioned
+      // within the scrollable container
+      const scrollTop = scrollableContainerRef.current?.scrollTop ?? 0
+      const scrollLeft = scrollableContainerRef.current?.scrollLeft ?? 0
+      const scrollableRect = scrollableContainerRef.current?.getBoundingClientRect() ?? containerRect
       const position = {
-        x: minLeft - containerRect.left + (maxRight - minLeft) / 2,
-        y: minTop - containerRect.top,
+        x: minLeft - scrollableRect.left + (maxRight - minLeft) / 2 + scrollLeft,
+        y: minTop - scrollableRect.top + scrollTop,
       }
       
       setSelectedText({ text, pageNumber, position, coordinates })
@@ -514,6 +519,7 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
 
       <HighlightNoteModal
         isOpen={showNoteModal}
+        highlightedText={pendingHighlight?.text}
         onSave={handleNoteSave}
         onCancel={handleNoteCancel}
       />

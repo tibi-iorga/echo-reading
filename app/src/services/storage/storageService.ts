@@ -21,6 +21,7 @@ const LAST_PAGE_READ_STORAGE_KEY = 'pdf_last_page_read'
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 const THEME_STORAGE_KEY = 'app_theme'
 const DISMISSED_WARNING_STORAGE_KEY = 'dismissed_sync_warning'
+const CANVAS_STORAGE_KEY = 'pdf_canvas'
 
 // Current data structure versions
 const CURRENT_CHAT_MESSAGES_VERSION = 1
@@ -107,11 +108,12 @@ class StorageService {
     try {
       const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
       if (fileSyncService.hasSyncFile()) {
-        // Get current page values and metadata to save to sync file
+        // Get current page values, metadata, and canvas content to save to sync file
         const furthestPage = this.getFurthestPage(pdfId)
         const lastPageRead = this.getLastPageRead(pdfId)
         const metadata = this.getDocumentMetadata(pdfId)
-        const syncData = { annotations, furthestPage, lastPageRead, metadata }
+        const canvasContent = this.getCanvasContent(pdfId) || null
+        const syncData = { annotations, furthestPage, lastPageRead, metadata, canvasContent }
         await fileSyncService.writeSyncData(syncData)
       }
     } catch (error) {
@@ -240,8 +242,28 @@ The user is actively reading and learning, so prioritize clarity and understandi
     )
   }
 
+  // Canvas content (per PDF)
+  getCanvasContent(pdfId: string): string {
+    return localStorage.getItem(`${CANVAS_STORAGE_KEY}_${pdfId}`) ?? ''
+  }
+
+  async saveCanvasContent(pdfId: string, content: string): Promise<void> {
+    localStorage.setItem(`${CANVAS_STORAGE_KEY}_${pdfId}`, content)
+
+    // Sync to file if file sync is enabled
+    try {
+      const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
+      if (fileSyncService.hasSyncFile()) {
+        const existingData = await fileSyncService.readSyncData()
+        await fileSyncService.writeSyncData({ ...existingData, canvasContent: content })
+      }
+    } catch (error) {
+      console.warn('Failed to sync canvas content to file:', error)
+    }
+  }
+
   // Global UI state (tab, panel collapsed) with versioning
-  getGlobalUIState(): { activeTab: 'notes' | 'chat' | 'settings'; isPanelCollapsed: boolean } | null {
+  getGlobalUIState(): { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean } | null {
     const stored = localStorage.getItem(GLOBAL_UI_STATE_STORAGE_KEY)
     if (!stored) return null
     try {
@@ -257,7 +279,7 @@ The user is actively reading and learning, so prioritize clarity and understandi
     }
   }
 
-  saveGlobalUIState(state: { activeTab: 'notes' | 'chat' | 'settings'; isPanelCollapsed: boolean }): void {
+  saveGlobalUIState(state: { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean }): void {
     const versionedData = {
       version: CURRENT_GLOBAL_UI_STATE_VERSION,
       ...state,
@@ -441,30 +463,32 @@ function migrateUIState(data: { version: number; currentPage?: number; scale?: n
   return null
 }
 
-function migrateGlobalUIState(data: { version: number; activeTab?: string; isPanelCollapsed?: boolean }): { activeTab: 'notes' | 'chat' | 'settings'; isPanelCollapsed: boolean } | null {
+function migrateGlobalUIState(data: { version: number; activeTab?: string; isPanelCollapsed?: boolean }): { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean } | null {
+  const validTabs = ['notes', 'chat', 'settings', 'canvas']
+
   if (data.version === CURRENT_GLOBAL_UI_STATE_VERSION) {
-    if (data.activeTab && ['notes', 'chat', 'settings'].includes(data.activeTab)) {
+    if (data.activeTab && validTabs.includes(data.activeTab)) {
       return {
-        activeTab: data.activeTab as 'notes' | 'chat' | 'settings',
+        activeTab: data.activeTab as 'notes' | 'chat' | 'settings' | 'canvas',
         isPanelCollapsed: data.isPanelCollapsed ?? false,
       }
     }
     return null
   }
-  
+
   // Future migrations go here
   // Example: if (data.version === 1) { return migrateFromV1ToV2(data) }
-  
+
   // If version is newer than current, return null (safety fallback)
   if (data.version > CURRENT_GLOBAL_UI_STATE_VERSION) {
     console.warn(`Global UI state version ${data.version} is newer than supported ${CURRENT_GLOBAL_UI_STATE_VERSION}. Resetting.`)
     return null
   }
-  
+
   // Unknown version, try to extract state if present
-  if (data.activeTab && ['notes', 'chat', 'settings'].includes(data.activeTab)) {
+  if (data.activeTab && validTabs.includes(data.activeTab)) {
     return {
-      activeTab: data.activeTab as 'notes' | 'chat' | 'settings',
+      activeTab: data.activeTab as 'notes' | 'chat' | 'settings' | 'canvas',
       isPanelCollapsed: data.isPanelCollapsed ?? false,
     }
   }

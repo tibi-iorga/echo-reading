@@ -14,6 +14,7 @@ export interface SyncFileData {
   furthestPage?: number | null
   lastPageRead?: number | null
   metadata?: { title: string; author: string | null } | null
+  canvasContent?: string | null
 }
 
 class FileSyncService {
@@ -172,12 +173,13 @@ class FileSyncService {
         return { annotations: data, furthestPage: null, lastPageRead: null, metadata: null }
       }
       
-      // New format: object with annotations and optionally furthestPage, lastPageRead, and metadata
+      // New format: object with annotations and optionally furthestPage, lastPageRead, metadata, and canvasContent
       return {
         annotations: data.annotations || [],
         furthestPage: data.furthestPage ?? null,
         lastPageRead: data.lastPageRead ?? null,
-        metadata: data.metadata ?? null
+        metadata: data.metadata ?? null,
+        canvasContent: data.canvasContent ?? null
       }
     } catch (error) {
       console.error('Failed to read sync file:', error)
@@ -216,13 +218,14 @@ class FileSyncService {
    * Write annotations to sync file (backward compatibility)
    */
   async writeAnnotations(annotations: Annotation[]): Promise<void> {
-    // Read existing sync data to preserve furthest page, lastPageRead, and metadata
+    // Read existing sync data to preserve furthest page, lastPageRead, metadata, and canvasContent
     const existingData = await this.readSyncData()
     await this.writeSyncData({
       annotations,
       furthestPage: existingData.furthestPage,
       lastPageRead: existingData.lastPageRead,
-      metadata: existingData.metadata
+      metadata: existingData.metadata,
+      canvasContent: existingData.canvasContent
     })
   }
 
@@ -230,13 +233,14 @@ class FileSyncService {
    * Write annotations and furthest page to sync file
    */
   async writeAnnotationsWithFurthestPage(annotations: Annotation[], furthestPage: number | null): Promise<void> {
-    // Read existing sync data to preserve lastPageRead and metadata
+    // Read existing sync data to preserve lastPageRead, metadata, and canvasContent
     const existingData = await this.readSyncData()
     await this.writeSyncData({
       annotations,
       furthestPage,
       lastPageRead: existingData.lastPageRead,
-      metadata: existingData.metadata
+      metadata: existingData.metadata,
+      canvasContent: existingData.canvasContent
     })
   }
 
@@ -244,13 +248,14 @@ class FileSyncService {
    * Write annotations, furthest page, and last page read to sync file
    */
   async writeAnnotationsWithPages(annotations: Annotation[], furthestPage: number | null, lastPageRead: number | null): Promise<void> {
-    // Read existing sync data to preserve metadata
+    // Read existing sync data to preserve metadata and canvasContent
     const existingData = await this.readSyncData()
     await this.writeSyncData({
       annotations,
       furthestPage,
       lastPageRead,
-      metadata: existingData.metadata
+      metadata: existingData.metadata,
+      canvasContent: existingData.canvasContent
     })
   }
 
@@ -320,7 +325,7 @@ class FileSyncService {
 
       // Initialize with empty sync data structure
       const writable = await fileHandle.createWritable()
-      await writable.write(JSON.stringify({ annotations: [], furthestPage: null, lastPageRead: null }, null, 2))
+      await writable.write(JSON.stringify({ annotations: [], furthestPage: null, lastPageRead: null, canvasContent: null }, null, 2))
       await writable.close()
 
       return fileHandle

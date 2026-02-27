@@ -6,6 +6,7 @@ import type { LLMMessage } from '@/types'
 import { MarkdownRenderer } from '@/utils/markdownRenderer'
 import { SelectionActions, type SelectionAction } from '@/components/SelectionActions/SelectionActions'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
+import { extractPageText } from '@/utils/pdfTextExtractor'
 
 interface Message {
   id: string
@@ -22,6 +23,8 @@ interface ChatProps {
   documentMetadata?: { title: string; author: string | null } | null
   currentPage?: number
   currentPageText?: string
+  numPages?: number
+  pdfUrl?: string
   onSaveInsight?: (text: string) => void
   onClearChat?: () => void
 }
@@ -38,7 +41,7 @@ function QuotedMessage({ text, onClose }: QuotedMessageProps) {
     <div className="mx-4 mb-2 p-3 bg-gray-50 dark:bg-gray-800 border-l-4 border-blue-500 dark:border-blue-400 rounded flex items-start gap-2">
       <div className="flex-1 min-w-0">
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Quoted text</div>
-        <div className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">{truncatedText}</div>
+        <div className="text-base text-gray-700 dark:text-gray-300 line-clamp-2">{truncatedText}</div>
       </div>
       <button
         onClick={onClose}
@@ -63,7 +66,7 @@ function UserMessage({ message }: { message: Message }) {
               <div className="w-1 bg-white/40 rounded flex-shrink-0" style={{ minHeight: '40px' }} />
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-blue-100/70 mb-0.5">Quoted text</div>
-                <div className="text-sm text-blue-50/80 line-clamp-2 whitespace-pre-wrap break-words">{message.quotedText}</div>
+                <div className="text-base text-blue-50/80 line-clamp-2 whitespace-pre-wrap break-words">{message.quotedText}</div>
               </div>
             </div>
           </div>
@@ -190,13 +193,14 @@ const PRESET_COMMANDS: PresetCommand[] = [
   { name: 'how', text: 'How does this work?', description: 'How does this work?' },
 ]
 
-export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages, onMessagesChange, documentMetadata, currentPage, currentPageText, onSaveInsight, onClearChat }: ChatProps = {}) {
+export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages, onMessagesChange, documentMetadata, currentPage, currentPageText, numPages, pdfUrl, onSaveInsight, onClearChat }: ChatProps = {}) {
   const [internalMessages, setInternalMessages] = useState<Message[]>([])
   const messages = externalMessages ?? internalMessages
   const setMessages = onMessagesChange ?? setInternalMessages
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [includePageContext, setIncludePageContext] = useState(false)
+  const [contextPageCount, setContextPageCount] = useState(1)
   const [hasApiKey, setHasApiKey] = useState<boolean>(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -323,11 +327,34 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     }
 
     // Determine what quoted text to include in the message
-    // If includePageContext is enabled, use currentPageText as quoted text
+    // If includePageContext is enabled, extract text from the page range
     // Otherwise, use manually quoted text if available
     let messageQuotedText: string | null = null
-    if (includePageContext && currentPageText && currentPageText.trim()) {
-      messageQuotedText = currentPageText.trim()
+    const pageContextEnabled = includePageContext && pdfUrl
+    if (pageContextEnabled) {
+      // Compute range centered on current page
+      const page = currentPage || 1
+      const half = Math.floor((contextPageCount - 1) / 2)
+      let rangeStart = page - half
+      let rangeEnd = rangeStart + contextPageCount - 1
+      if (rangeStart < 1) { rangeStart = 1; rangeEnd = Math.min(contextPageCount, numPages || 1) }
+      if (rangeEnd > (numPages || 1)) { rangeEnd = numPages || 1; rangeStart = Math.max(1, rangeEnd - contextPageCount + 1) }
+
+      // Extract text from page range
+      const pageTexts: string[] = []
+      for (let p = rangeStart; p <= rangeEnd; p++) {
+        if (p === currentPage && currentPageText && currentPageText.trim()) {
+          pageTexts.push(`[Page ${p}]\n${currentPageText.trim()}`)
+        } else {
+          const text = await extractPageText(pdfUrl, p)
+          if (text.trim()) {
+            pageTexts.push(`[Page ${p}]\n${text.trim()}`)
+          }
+        }
+      }
+      if (pageTexts.length > 0) {
+        messageQuotedText = pageTexts.join('\n\n')
+      }
     } else if (quotedText) {
       messageQuotedText = quotedText
     }
@@ -343,16 +370,17 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     // Add user message immediately
     const newMessages = [...messages, userMessageObj]
     setMessages(newMessages)
-    
+
     // Clear input and quoted text
     setInput('')
     if (onQuotedTextClear) {
       onQuotedTextClear()
     }
-    
-    // Uncheck the include page context checkbox after sending
+
+    // Uncheck the include page context checkbox and reset page count after sending
     if (includePageContext) {
       setIncludePageContext(false)
+      setContextPageCount(1)
     }
 
     // Focus textarea immediately after clearing input
@@ -418,10 +446,9 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
         systemInstructions = systemInstructions.replace(/\{\{document_author\}\}/g, '')
       }
 
-      // Add page context if toggle is enabled and page text is available
-      if (includePageContext && currentPageText && currentPageText.trim()) {
-        const pageContext = `\n\n[Current Page ${currentPage || '?'} Content]\n${currentPageText.trim()}`
-        systemInstructions = systemInstructions + pageContext
+      // Add page context if toggle was enabled and page text was extracted
+      if (pageContextEnabled && messageQuotedText) {
+        systemInstructions = systemInstructions + `\n\n${messageQuotedText}`
       }
 
       // Get model from storage (default to provider's default if not set)
@@ -623,7 +650,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
         )}
         {messages.length === 0 && hasApiKey && (
           <div className="text-center text-gray-500 dark:text-gray-400 py-8 px-4">
-            <p className="text-sm">Explore the document deeper by asking questions,<br />or select text in the PDF to quote it and focus on specific passages.</p>
+            <p className="text-base">Explore the document deeper by asking questions,<br />or select text in the PDF to quote it and focus on specific passages.</p>
           </div>
         )}
         {messages.map((message) => (
@@ -657,23 +684,57 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
             }} 
           />
         )}
-        {includePageContext && currentPageText && (
+        {includePageContext && (
           <div className="mx-4 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 text-xs text-gray-600 dark:text-gray-300">
-            Page {currentPage || '?'} context will be included
+            {(() => {
+              const page = currentPage || 1
+              const half = Math.floor((contextPageCount - 1) / 2)
+              let s = page - half
+              let e = s + contextPageCount - 1
+              if (s < 1) { s = 1; e = Math.min(contextPageCount, numPages || 1) }
+              if (e > (numPages || 1)) { e = numPages || 1; s = Math.max(1, e - contextPageCount + 1) }
+              return s === e ? `Page ${s} context will be included` : `Pages ${s}–${e} context will be included`
+            })()}
           </div>
         )}
         <div className="px-4 pb-3 pt-2">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={includePageContext}
-                onChange={(e) => setIncludePageContext(e.target.checked)}
+                onChange={(e) => {
+                  setIncludePageContext(e.target.checked)
+                  if (e.target.checked) setContextPageCount(1)
+                }}
                 disabled={!currentPageText || isLoading}
                 className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
               />
-              <span className="leading-none">Include current page as context</span>
+              <span className="leading-none">Include page context</span>
             </label>
+            {includePageContext && (
+              <span className="flex items-center gap-0.5 text-sm text-gray-700 dark:text-gray-300">
+                <button
+                  type="button"
+                  onClick={() => setContextPageCount(c => Math.max(1, c - 1))}
+                  disabled={contextPageCount <= 1}
+                  className="w-5 h-5 flex items-center justify-center rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  −
+                </button>
+                <span className="min-w-[4ch] text-center text-xs font-medium">
+                  {contextPageCount === 1 ? '1 page' : `${contextPageCount} pages`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setContextPageCount(c => Math.min(c + 1, numPages || 1))}
+                  disabled={contextPageCount >= (numPages || 1)}
+                  className="w-5 h-5 flex items-center justify-center rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  +
+                </button>
+              </span>
+            )}
             <div className="relative group flex items-center">
               <button
                 type="button"
@@ -686,7 +747,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
               </button>
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-800 text-white text-xs shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-10 pointer-events-none">
                 <div className="text-gray-300">
-                  When enabled, the full text content of the current page will be automatically included in your message. This helps the assistant understand the context of your question and provide more relevant answers based on what you're currently reading.
+                  When enabled, the text content of the selected pages will be included in your message. Adjust the page range to include content that spans multiple pages.
                 </div>
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
                   <div className="w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
@@ -707,7 +768,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                 placeholder={hasApiKey ? (isInputFocused ? "Type / for quick actions" : "Ask anything") : "Configure API key in Settings to chat"}
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
-                className="w-full px-3 py-1 text-sm resize-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
+                className="w-full px-3 py-1 text-base resize-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
                 rows={1}
                 disabled={isLoading || !hasApiKey}
               />

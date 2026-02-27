@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Annotation } from '@/types'
 import type { ExportFormat } from './ExportDropdown'
+import { exportToText } from '@/utils/export'
 
 interface ExportPreviewModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ export function ExportPreviewModal({
   onClose,
 }: ExportPreviewModalProps) {
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
+  const [copied, setCopied] = useState(false)
 
   if (!isOpen) return null
 
@@ -124,7 +126,7 @@ export function ExportPreviewModal({
                       <div
                         className={`border-l-[3px] ${getHighlightBorderColor(h.color)} pl-3`}
                       >
-                        <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                        <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed">
                           {h.text}
                         </p>
                         {h.note && (
@@ -155,7 +157,7 @@ export function ExportPreviewModal({
                         {n.pageNumber ? `NOTE \u00B7 PAGE ${n.pageNumber}` : 'FREE FORM NOTE'}
                       </p>
                       <div className="border-l-[3px] border-l-green-400 pl-3">
-                        <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                        <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
                           {n.content}
                         </p>
                       </div>
@@ -191,7 +193,32 @@ export function ExportPreviewModal({
         {/* Footer with export buttons */}
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400 dark:text-gray-500">Choose a format to download</p>
+            <button
+              onClick={async () => {
+                const text = exportToText(annotations, documentMetadata ? { title: documentMetadata.title, author: documentMetadata.author } : undefined)
+                await navigator.clipboard.writeText(text)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              }}
+              disabled={annotations.length === 0}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+            >
+              {copied ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy
+                </>
+              )}
+            </button>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleExport('markdown')}

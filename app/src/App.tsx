@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { usePDF } from '@/hooks/usePDF'
 import { useAnnotations } from '@/hooks/useAnnotations'
+import { useCanvas } from '@/hooks/useCanvas'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { PDFViewer } from '@/components/PDFViewer/PDFViewer'
 import { PDFToolbar } from '@/components/PDFViewer/PDFToolbar'
@@ -21,9 +22,10 @@ function App() {
   const { pdf, loadPDF, clearPDF } = usePDF()
   const pdfId = pdf ? `${pdf.file.name}_${pdf.file.size}` : null
   const { annotations, addHighlight, updateHighlightNote, addNote, removeAnnotation, clearAllAnnotations, addBookmark, reloadAnnotations } = useAnnotations(pdfId)
+  const { canvasContent, updateCanvasContent, reloadCanvas } = useCanvas(pdfId)
   const [_selectedText, setSelectedText] = useState<{ text: string; pageNumber: number } | null>(null)
   const [quotedText, setQuotedText] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'settings'>('chat')
+  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'settings' | 'canvas'>('chat')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false)
   const [scale, setScale] = useState<number>(1.5)
@@ -295,13 +297,15 @@ function App() {
             ? importedAnnotations
             : syncData.annotations
           
-          // Write back to sync file with updated metadata
+          // Write back to sync file with updated metadata and canvas content
+          const localCanvasContent = storageService.getCanvasContent(pdfId)
           await fileSyncService.writeSyncData({
             ...syncData,
             metadata,
             annotations: sourceAnnotations,
             furthestPage: syncData.furthestPage ?? null,
-            lastPageRead: syncData.lastPageRead ?? null
+            lastPageRead: syncData.lastPageRead ?? null,
+            canvasContent: syncData.canvasContent || localCanvasContent || null
           })
           
           // Sync file is source of truth for annotations: always replace localStorage
@@ -309,6 +313,12 @@ function App() {
           // annotations from a previous session or a different book are cleared.
           await storageService.saveAnnotations(pdfId, sourceAnnotations)
           reloadAnnotations()
+
+          // Load canvas content from sync file (write to localStorage directly to avoid circular sync)
+          if (syncData.canvasContent) {
+            localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
+            reloadCanvas()
+          }
         } catch (error) {
           console.warn('Failed to load from sync file:', error)
           // If sync file read failed but we have imported annotations, use those
@@ -331,7 +341,7 @@ function App() {
     
     setShowOpenFileModal(false)
     }
-  }, [pdf, reloadAnnotations])
+  }, [pdf, reloadAnnotations, reloadCanvas])
 
   const handleOpenFileCancel = useCallback(() => {
     // User cancelled - clear the PDF and return to file selector
@@ -472,6 +482,12 @@ function App() {
             isManualForwardNavigationRef.current = false
             setCurrentPage(syncData.lastPageRead)
           }
+
+          // Load canvas content from sync file (write to localStorage directly to avoid circular sync)
+          if (syncData.canvasContent) {
+            localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
+            reloadCanvas()
+          }
         } catch (error) {
           console.warn('Failed to reload page data from sync file:', error)
         } finally {
@@ -510,6 +526,10 @@ function App() {
               }
               if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
                 await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
+              }
+              // Load canvas content from sync file
+              if (syncData.canvasContent) {
+                localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
               }
             } catch (error) {
               // Fallback to localStorage
@@ -911,7 +931,7 @@ function App() {
           numPages={numPages}
           onPageChange={handleToolbarPageChange}
           onBookmark={() => {
-            addBookmark(currentPage)
+            addBookmark(currentPage, currentPageText || undefined)
             setActiveTab('notes')
           }}
           isBookmarked={annotations.some((a) => a.type === 'bookmark' && a.pageNumber === currentPage)}
@@ -966,6 +986,7 @@ function App() {
           currentPage={currentPage}
           currentPageText={currentPageText}
           numPages={numPages}
+          pdfUrl={pdf?.url}
           pdfId={pdfId}
           onDocumentMetadataChange={handleMetadataChange}
           onSaveInsight={handleSaveInsight}
@@ -975,6 +996,8 @@ function App() {
           onSyncFileSectionExpanded={handleSyncFileSectionExpanded}
           isCollapsed={isPanelCollapsed}
           onToggleCollapsed={() => setIsPanelCollapsed(!isPanelCollapsed)}
+          canvasContent={canvasContent}
+          onCanvasContentChange={updateCanvasContent}
         />
       </div>
 

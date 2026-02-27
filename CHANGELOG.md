@@ -5,6 +5,33 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-27
+
+### Added
+- **Canvas**: New writing tab in the right panel — a TipTap-based markdown editor for composing structured thinking alongside your reading
+  - Rich text formatting toolbar: bold, italic, strikethrough, headings (H1–H3), bullet lists, numbered lists, blockquotes
+  - BubbleMenu for quick formatting on text selection
+  - `/notes` slash command to pull in highlights, notes, and bookmarks as formatted blockquotes
+  - Slash command menu with keyboard navigation (arrow keys, Enter, Escape)
+  - Canvas export modal with Markdown and plain text download
+  - Copy to clipboard in both Notes and Canvas export modals
+  - Canvas content persisted per PDF with auto-save (debounced 500ms)
+  - Canvas content included in sync file for cross-browser persistence
+  - Empty state placeholder: "Capture your thinking while you read. Type / to pull in your notes."
+- Highlight note editing: inline modal to add or edit notes on existing highlights
+
+### Changed
+- Unified all content text to 16px across Chat, Notes, Canvas, and Export modals for consistent reading experience
+- Chat input textarea bumped from 14px to 16px to match message content
+- Toolbar formatting buttons sized consistently with action buttons
+- Bullet list and numbered list icons redesigned for visual clarity
+
+### Technical
+- Added TipTap v3 editor dependencies (`@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/pm`, `@tiptap/extension-placeholder`, `@tiptap/suggestion`)
+- Extended `SyncFileData` interface with `canvasContent` field
+- All sync file write paths preserve canvas content (annotations, page progress, metadata saves)
+- Canvas editor styles managed via `.canvas-editor` CSS class (no Tailwind Typography plugin required)
+
 ## [0.4.0] - 2026-02-14
 
 ### Added

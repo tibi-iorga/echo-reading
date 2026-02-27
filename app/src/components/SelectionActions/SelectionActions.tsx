@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export interface SelectionAction {
   id: string
@@ -6,6 +6,9 @@ export interface SelectionAction {
   onClick: () => void
   title?: string
 }
+
+const VERTICAL_PADDING = 8
+const MIN_SPACE_ABOVE_TO_SHOW_MENU_ABOVE = 140
 
 interface SelectionActionsProps {
   position: { x: number; y: number }
@@ -19,6 +22,19 @@ export function SelectionActions({
   onClose,
 }: SelectionActionsProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const [showBelow, setShowBelow] = useState(() => position.y < MIN_SPACE_ABOVE_TO_SHOW_MENU_ABOVE)
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current
+    if (!menu) return
+
+    const menuRect = menu.getBoundingClientRect()
+
+    // If the menu's top edge is clipped by the viewport, switch to showing below
+    if (menuRect.top < 0) {
+      setShowBelow(true)
+    }
+  }, [position])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,9 +66,9 @@ export function SelectionActions({
       className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-fit"
       style={{
         left: `${position.x}px`,
-        top: `${position.y}px`,
-        transform: 'translateY(-100%)',
-        marginTop: '-8px',
+        top: showBelow ? `${position.y + VERTICAL_PADDING}px` : `${position.y}px`,
+        transform: showBelow ? 'none' : 'translateY(-100%)',
+        marginTop: showBelow ? 0 : -VERTICAL_PADDING,
       }}
     >
       {actions.map((action) => (

@@ -3,6 +3,7 @@ import type { Annotation } from '@/types'
 import { AnnotationList } from './AnnotationList'
 import { Chat } from './Chat'
 import { SettingsPanel } from './SettingsPanel'
+import { Canvas } from './Canvas'
 import { ExportPreviewModal } from './ExportPreviewModal'
 import type { ExportFormat } from './ExportDropdown'
 import { FreeFormNoteModal } from './FreeFormNoteModal'
@@ -18,8 +19,8 @@ interface NotesPanelProps {
   onExport: (format: ExportFormat) => void
   quotedText?: string | null
   onQuotedTextClear?: () => void
-  activeTab?: 'notes' | 'chat' | 'settings'
-  onTabChange?: (tab: 'notes' | 'chat' | 'settings') => void
+  activeTab?: 'notes' | 'chat' | 'settings' | 'canvas'
+  onTabChange?: (tab: 'notes' | 'chat' | 'settings' | 'canvas') => void
   onNavigateToPage?: (pageNumber: number) => void
   onUpdateHighlightNote?: (id: string, note: string) => void
   onUpdateNote?: (id: string, content: string, pageNumber?: number) => void
@@ -29,6 +30,7 @@ interface NotesPanelProps {
   currentPage?: number
   currentPageText?: string
   numPages?: number
+  pdfUrl?: string
   pdfId?: string | null
   onDocumentMetadataChange?: (metadata: { title: string; author: string | null }) => void
   onSaveInsight?: (text: string) => void
@@ -40,6 +42,8 @@ interface NotesPanelProps {
   onSyncFileSectionExpanded?: () => void
   isCollapsed?: boolean
   onToggleCollapsed?: () => void
+  canvasContent?: string
+  onCanvasContentChange?: (content: string) => void
 }
 
 export function NotesPanel({
@@ -59,6 +63,8 @@ export function NotesPanel({
   documentMetadata,
   currentPage,
   currentPageText,
+  numPages,
+  pdfUrl,
   pdfId,
   onDocumentMetadataChange,
   onSaveInsight,
@@ -70,8 +76,10 @@ export function NotesPanel({
   onSyncFileSectionExpanded,
   isCollapsed,
   onToggleCollapsed,
+  canvasContent,
+  onCanvasContentChange,
 }: NotesPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'notes' | 'chat' | 'settings'>('chat')
+  const [internalActiveTab, setInternalActiveTab] = useState<'notes' | 'chat' | 'settings' | 'canvas'>('chat')
   const activeTab = controlledActiveTab ?? internalActiveTab
   const setActiveTab = onTabChange ?? setInternalActiveTab
   const [showNoteModal, setShowNoteModal] = useState(false)
@@ -208,7 +216,7 @@ export function NotesPanel({
     }
   }
 
-  const handleIconClick = (tab: 'notes' | 'chat' | 'settings') => {
+  const handleIconClick = (tab: 'notes' | 'chat' | 'settings' | 'canvas') => {
     if (isCollapsed && onToggleCollapsed) {
       onToggleCollapsed()
     }
@@ -250,7 +258,7 @@ export function NotesPanel({
             </svg>
           </button>
 
-          {/* Notes icon */}
+          {/* Notes icon — highlights & annotations list */}
           <button
             onClick={() => handleIconClick('notes')}
             className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
@@ -259,6 +267,21 @@ export function NotesPanel({
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
             }`}
             title="Notes"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+
+          {/* Canvas icon — document editor */}
+          <button
+            onClick={() => handleIconClick('canvas')}
+            className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
+              activeTab === 'canvas'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
+            }`}
+            title="Canvas"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -336,10 +359,37 @@ export function NotesPanel({
             title="Notes"
           >
             <svg className={useIconsOnly ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
             {!useIconsOnly && 'Notes'}
             {activeTab === 'notes' && !useIconsOnly && (
+              <div className="absolute bottom-[-5px] left-0 right-0 h-0.5 bg-blue-500 dark:bg-blue-400"></div>
+            )}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'canvas'}
+            onClick={() => setActiveTab('canvas')}
+            className={`flex items-center justify-center gap-2 relative flex-shrink-0 focus:outline-none ${
+              useIconsOnly
+                ? 'w-10 h-10 rounded'
+                : 'px-2 py-1 text-sm font-medium h-[28px]'
+            } ${
+              activeTab === 'canvas'
+                ? useIconsOnly
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  : 'text-blue-600 dark:text-blue-400'
+                : useIconsOnly
+                  ? 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+            title="Canvas"
+          >
+            <svg className={useIconsOnly ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {!useIconsOnly && 'Canvas'}
+            {activeTab === 'canvas' && !useIconsOnly && (
               <div className="absolute bottom-[-5px] left-0 right-0 h-0.5 bg-blue-500 dark:bg-blue-400"></div>
             )}
           </button>
@@ -478,14 +528,16 @@ export function NotesPanel({
         </div>
 
         <div className={`flex-1 flex flex-col min-h-0 ${activeTab === 'chat' ? '' : 'hidden'}`}>
-          <Chat 
-            quotedText={quotedText} 
+          <Chat
+            quotedText={quotedText}
             onQuotedTextClear={onQuotedTextClear}
             messages={chatMessages}
             onMessagesChange={onChatMessagesChange}
             documentMetadata={documentMetadata}
             currentPage={currentPage}
             currentPageText={currentPageText}
+            numPages={numPages}
+            pdfUrl={pdfUrl}
             onSaveInsight={onSaveInsight}
             onClearChat={onClearChat}
           />
@@ -499,6 +551,15 @@ export function NotesPanel({
             onReloadAnnotations={onReloadAnnotations}
             expandSyncFileSection={expandSyncFileSection}
             onSyncFileSectionExpanded={onSyncFileSectionExpanded}
+          />
+        </div>
+
+        <div className={`flex-1 flex flex-col min-h-0 ${activeTab === 'canvas' ? '' : 'hidden'}`}>
+          <Canvas
+            content={canvasContent ?? ''}
+            onContentChange={onCanvasContentChange ?? (() => {})}
+            annotations={annotations}
+            documentMetadata={documentMetadata}
           />
         </div>
       </div>

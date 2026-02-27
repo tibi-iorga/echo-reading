@@ -38,6 +38,7 @@ export interface Bookmark {
   id: string
   type: 'bookmark'
   pageNumber: number
+  pageText?: string
   createdAt: Date
 }
 
