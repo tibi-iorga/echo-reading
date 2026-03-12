@@ -31,7 +31,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   const { canvasContent, updateCanvasContent } = useCanvas(pdfId, userId)
   const [_selectedText, setSelectedText] = useState<{ text: string; pageNumber: number } | null>(null)
   const [quotedText, setQuotedText] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'canvas'>('chat')
+  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'canvas'>('notes')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false)
   const [scale, setScale] = useState<number>(1.5)
@@ -244,7 +244,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
         downloadPDF(blob, `${baseName}_notes.pdf`)
       })
     }
-  }, [annotations, pdf, documentMetadata])
+  }, [annotations, documentMetadata, book.filename])
 
   // Debounce timer refs for UI state
   const uiStateDebounceRef = useRef<NodeJS.Timeout | null>(null)

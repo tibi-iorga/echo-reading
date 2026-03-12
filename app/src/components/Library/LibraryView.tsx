@@ -154,14 +154,48 @@ export function LibraryView() {
             Loading your library...
           </div>
         ) : books.length === 0 ? (
-          <div className="text-center py-24">
-            <div className="text-gray-400 dark:text-gray-500 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+          <div className="max-w-2xl mx-auto py-16">
+            {/* Hero empty state */}
+            <div className="text-center mb-10">
+              <div className="text-gray-300 dark:text-gray-600 mb-5">
+                <svg className="w-20 h-20 mx-auto" fill="none" stroke="currentColor" strokeWidth={0.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Upload your first PDF to get started</h2>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Drag a file onto this page or use the upload button above</p>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-lg mb-1">Your library is empty</p>
-            <p className="text-gray-400 dark:text-gray-500 text-sm">Upload a PDF or drag one onto this page</p>
+
+            {/* Feature cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
+                <div className="text-blue-500 dark:text-blue-400 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">AI Chat</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Ask questions about your document using your own API key</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
+                <div className="text-amber-500 dark:text-amber-400 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">Annotations</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Highlight passages and add notes as you read</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
+                <div className="text-emerald-500 dark:text-emerald-400 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">Canvas</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Write structured notes alongside your reading</p>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">

@@ -30,7 +30,7 @@ async function initializeApp() {
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/sign-in">
+      <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/sign-in" signInFallbackRedirectUrl="/library" signUpFallbackRedirectUrl="/library">
         <ThemeProvider>
           <BrowserRouter>
             <AppRoutes />
