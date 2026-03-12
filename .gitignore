@@ -18,6 +18,9 @@ logs/
 .env.local
 *.local
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # IDE files
 .vscode/*
 !.vscode/extensions.json

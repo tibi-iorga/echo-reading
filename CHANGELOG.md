@@ -5,6 +5,31 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-12
+
+### Added
+- **Supabase backend**: Books, annotations, canvas content, reading progress, and user settings now persist in Supabase (replaces local-only storage)
+- **Authentication**: Clerk-based sign-in/sign-up with protected routes
+- **Library view**: Book grid with cover thumbnails, upload modal, edit/delete, and Kindle-style reading progress indicators
+- **Settings page**: Redesigned with sidebar navigation — Account (Clerk), LLM Settings, and Appearance sections
+- **Client-side routing**: React Router with `/library`, `/read/:id`, `/settings`, `/sign-in`, `/sign-up` routes
+- **Book upload**: PDF upload to Supabase Storage with automatic cover extraction and page count detection
+- Supabase schema reference (`supabase-schema.sql`) and annotation migration script
+
+### Changed
+- PDF toolbar moved from bottom to top of the reading view for design consistency
+- Toolbar height aligned with notes panel tab bar (`h-[61px]`)
+- Reading progress now uses `last_page_read` (sequential position) instead of `furthest_page` (highest page visited)
+- Keyboard shortcut: replaced Settings (S) with Canvas (V)
+- Storage layer refactored — Supabase is now source of truth with localStorage as cache
+
+### Removed
+- Legacy file sync service (`fileSyncService.ts`)
+- Inline settings panel from notes sidebar
+- Import notes modal and open file modal (replaced by Library)
+- Unsaved notes warning component (no longer needed with cloud sync)
+- Deploy check scripts (redundant with CI)
+
 ## [0.5.0] - 2026-02-27
 
 ### Added
