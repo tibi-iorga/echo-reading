@@ -16,12 +16,12 @@ const faqs = [
   {
     question: 'What file types can I open?',
     answer:
-      'Echo supports PDF files. Upload any PDF from your device and start reading, annotating, and chatting right away.',
+      'Echo currently supports PDF files, with more formats coming soon. Upload any PDF from your device and start reading, annotating, and chatting right away.',
   },
   {
     question: 'Does it work across devices?',
     answer:
-      'Yes. Your account, library, annotations, and notes are synced through the cloud. Sign in on any device and pick up where you left off.',
+      'Yes. Your account, library, annotations, and notes are synced through the cloud. Sign in on any device and pick up where you left off. Your API key is not synced and will need to be entered on each device separately, by design, so it never leaves your browser.',
   },
 ]
 
