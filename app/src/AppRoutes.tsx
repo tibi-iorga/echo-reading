@@ -7,6 +7,7 @@ import { LandingPage } from '@/components/landing/LandingPage'
 import { LibraryView } from '@/components/Library/LibraryView'
 import { ReadingView } from '@/components/reading/ReadingView'
 import { SystemSettings } from '@/pages/SystemSettings'
+import { PrivacyPolicy } from '@/pages/PrivacyPolicy'
 
 function SupabaseLayout() {
   return (
@@ -23,6 +24,7 @@ export function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/sign-in/*" element={<SignInPage />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
 
       {/* Protected routes — auth checked, then Supabase initialized */}
       <Route element={<ProtectedLayout />}>

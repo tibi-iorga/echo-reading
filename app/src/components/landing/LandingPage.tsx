@@ -414,7 +414,10 @@ export function LandingPage() {
             </svg>
             <span className="text-sm font-medium">Echo</span>
           </div>
-          <span className="text-sm text-zinc-600">&copy; {new Date().getFullYear()} Echo Reading</span>
+          <div className="flex items-center gap-4">
+            <Link to="/privacy" className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors">Privacy</Link>
+            <span className="text-sm text-zinc-600">&copy; {new Date().getFullYear()} Echo Reading</span>
+          </div>
         </div>
       </footer>
     </div>
