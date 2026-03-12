@@ -20,7 +20,6 @@ const FURTHEST_PAGE_STORAGE_KEY = 'pdf_furthest_page'
 const LAST_PAGE_READ_STORAGE_KEY = 'pdf_last_page_read'
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width'
 const THEME_STORAGE_KEY = 'app_theme'
-const DISMISSED_WARNING_STORAGE_KEY = 'dismissed_sync_warning'
 const CANVAS_STORAGE_KEY = 'pdf_canvas'
 
 // Current data structure versions
@@ -97,29 +96,11 @@ class StorageService {
     }
   }
 
-  async saveAnnotations(pdfId: string, annotations: Annotation[]): Promise<void> {
-    // Save to localStorage
+  saveAnnotations(pdfId: string, annotations: Annotation[]): void {
     localStorage.setItem(
       `${ANNOTATIONS_STORAGE_KEY}_${pdfId}`,
       JSON.stringify(annotations)
     )
-    
-    // Sync to file if file sync is enabled
-    try {
-      const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
-      if (fileSyncService.hasSyncFile()) {
-        // Get current page values, metadata, and canvas content to save to sync file
-        const furthestPage = this.getFurthestPage(pdfId)
-        const lastPageRead = this.getLastPageRead(pdfId)
-        const metadata = this.getDocumentMetadata(pdfId)
-        const canvasContent = this.getCanvasContent(pdfId) || null
-        const syncData = { annotations, furthestPage, lastPageRead, metadata, canvasContent }
-        await fileSyncService.writeSyncData(syncData)
-      }
-    } catch (error) {
-      // File sync failed, but localStorage save succeeded
-      console.warn('Failed to sync annotations to file:', error)
-    }
   }
 
   getChatInstructions(): string | null {
@@ -247,23 +228,12 @@ The user is actively reading and learning, so prioritize clarity and understandi
     return localStorage.getItem(`${CANVAS_STORAGE_KEY}_${pdfId}`) ?? ''
   }
 
-  async saveCanvasContent(pdfId: string, content: string): Promise<void> {
+  saveCanvasContent(pdfId: string, content: string): void {
     localStorage.setItem(`${CANVAS_STORAGE_KEY}_${pdfId}`, content)
-
-    // Sync to file if file sync is enabled
-    try {
-      const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
-      if (fileSyncService.hasSyncFile()) {
-        const existingData = await fileSyncService.readSyncData()
-        await fileSyncService.writeSyncData({ ...existingData, canvasContent: content })
-      }
-    } catch (error) {
-      console.warn('Failed to sync canvas content to file:', error)
-    }
   }
 
   // Global UI state (tab, panel collapsed) with versioning
-  getGlobalUIState(): { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean } | null {
+  getGlobalUIState(): { activeTab: 'notes' | 'chat' | 'canvas'; isPanelCollapsed: boolean } | null {
     const stored = localStorage.getItem(GLOBAL_UI_STATE_STORAGE_KEY)
     if (!stored) return null
     try {
@@ -279,7 +249,7 @@ The user is actively reading and learning, so prioritize clarity and understandi
     }
   }
 
-  saveGlobalUIState(state: { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean }): void {
+  saveGlobalUIState(state: { activeTab: 'notes' | 'chat' | 'canvas'; isPanelCollapsed: boolean }): void {
     const versionedData = {
       version: CURRENT_GLOBAL_UI_STATE_VERSION,
       ...state,
@@ -302,41 +272,14 @@ The user is actively reading and learning, so prioritize clarity and understandi
     }
   }
 
-  async saveFurthestPage(pdfId: string, page: number, force: boolean = false): Promise<void> {
-    // Check sync file first (source of truth) if it exists
-    let syncFileFurthestPage: number | null = null
-    try {
-      const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
-      if (fileSyncService.hasSyncFile()) {
-        const syncData = await fileSyncService.readSyncData()
-        syncFileFurthestPage = syncData.furthestPage ?? null
-      }
-    } catch (error) {
-      // If sync file check fails, fall back to localStorage
-      console.warn('Failed to read sync file for furthest page check:', error)
-    }
+  saveFurthestPage(pdfId: string, page: number, force: boolean = false): void {
+    const currentFurthest = this.getFurthestPage(pdfId)
 
-    // Use sync file value as source of truth, fall back to localStorage if no sync file
-    const currentFurthest = syncFileFurthestPage !== null ? syncFileFurthestPage : this.getFurthestPage(pdfId)
-    
-    // Only update if the new page is further than the current furthest page, unless forced (e.g., from sync file)
     if (force || currentFurthest === null || page > currentFurthest) {
       localStorage.setItem(
         `${FURTHEST_PAGE_STORAGE_KEY}_${pdfId}`,
         page.toString()
       )
-      // Sync to file if file sync is enabled
-      try {
-        const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
-        if (fileSyncService.hasSyncFile()) {
-          const annotations = this.getAnnotations(pdfId)
-          const furthestPage = this.getFurthestPage(pdfId)
-          const lastPageRead = this.getLastPageRead(pdfId)
-          await fileSyncService.writeAnnotationsWithPages(annotations, furthestPage, lastPageRead)
-        }
-      } catch (error) {
-        console.warn('Failed to sync furthest page to file:', error)
-      }
     }
   }
 
@@ -352,23 +295,11 @@ The user is actively reading and learning, so prioritize clarity and understandi
     }
   }
 
-  async saveLastPageRead(pdfId: string, page: number): Promise<void> {
+  saveLastPageRead(pdfId: string, page: number): void {
     localStorage.setItem(
       `${LAST_PAGE_READ_STORAGE_KEY}_${pdfId}`,
       page.toString()
     )
-    // Sync to file if file sync is enabled
-    try {
-      const { fileSyncService } = await import('@/services/fileSync/fileSyncService')
-      if (fileSyncService.hasSyncFile()) {
-        const annotations = this.getAnnotations(pdfId)
-        const furthestPage = this.getFurthestPage(pdfId)
-        const lastPageRead = this.getLastPageRead(pdfId)
-        await fileSyncService.writeAnnotationsWithPages(annotations, furthestPage, lastPageRead)
-      }
-    } catch (error) {
-      console.warn('Failed to sync last page read to file:', error)
-    }
   }
 
   // Sidebar width preference
@@ -400,21 +331,6 @@ The user is actively reading and learning, so prioritize clarity and understandi
     localStorage.setItem(THEME_STORAGE_KEY, theme)
   }
 
-  // Dismissed warning state (per PDF ID)
-  isWarningDismissed(pdfId: string | null): boolean {
-    if (!pdfId) return false
-    const stored = localStorage.getItem(`${DISMISSED_WARNING_STORAGE_KEY}_${pdfId}`)
-    return stored === 'true'
-  }
-
-  setWarningDismissed(pdfId: string | null, dismissed: boolean): void {
-    if (!pdfId) return
-    if (dismissed) {
-      localStorage.setItem(`${DISMISSED_WARNING_STORAGE_KEY}_${pdfId}`, 'true')
-    } else {
-      localStorage.removeItem(`${DISMISSED_WARNING_STORAGE_KEY}_${pdfId}`)
-    }
-  }
 }
 
 // Chat message type for internal use
@@ -463,21 +379,27 @@ function migrateUIState(data: { version: number; currentPage?: number; scale?: n
   return null
 }
 
-function migrateGlobalUIState(data: { version: number; activeTab?: string; isPanelCollapsed?: boolean }): { activeTab: 'notes' | 'chat' | 'settings' | 'canvas'; isPanelCollapsed: boolean } | null {
-  const validTabs = ['notes', 'chat', 'settings', 'canvas']
+function migrateGlobalUIState(data: { version: number; activeTab?: string; isPanelCollapsed?: boolean }): { activeTab: 'notes' | 'chat' | 'canvas'; isPanelCollapsed: boolean } | null {
+  const validTabs = ['notes', 'chat', 'canvas']
+
+  // Migrate legacy tab names to valid current tabs
+  const migrateTab = (tab: string): string => {
+    if (tab === 'settings' || tab === 'document') return 'chat'
+    return tab
+  }
 
   if (data.version === CURRENT_GLOBAL_UI_STATE_VERSION) {
-    if (data.activeTab && validTabs.includes(data.activeTab)) {
-      return {
-        activeTab: data.activeTab as 'notes' | 'chat' | 'settings' | 'canvas',
-        isPanelCollapsed: data.isPanelCollapsed ?? false,
+    if (data.activeTab) {
+      const migrated = migrateTab(data.activeTab)
+      if (validTabs.includes(migrated)) {
+        return {
+          activeTab: migrated as 'notes' | 'chat' | 'canvas',
+          isPanelCollapsed: data.isPanelCollapsed ?? false,
+        }
       }
     }
     return null
   }
-
-  // Future migrations go here
-  // Example: if (data.version === 1) { return migrateFromV1ToV2(data) }
 
   // If version is newer than current, return null (safety fallback)
   if (data.version > CURRENT_GLOBAL_UI_STATE_VERSION) {
@@ -486,10 +408,13 @@ function migrateGlobalUIState(data: { version: number; activeTab?: string; isPan
   }
 
   // Unknown version, try to extract state if present
-  if (data.activeTab && validTabs.includes(data.activeTab)) {
-    return {
-      activeTab: data.activeTab as 'notes' | 'chat' | 'settings' | 'canvas',
-      isPanelCollapsed: data.isPanelCollapsed ?? false,
+  if (data.activeTab) {
+    const migrated = migrateTab(data.activeTab)
+    if (validTabs.includes(migrated)) {
+      return {
+        activeTab: migrated as 'notes' | 'chat' | 'canvas',
+        isPanelCollapsed: data.isPanelCollapsed ?? false,
+      }
     }
   }
   return null

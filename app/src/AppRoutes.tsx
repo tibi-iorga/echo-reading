@@ -1,0 +1,39 @@
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { ProtectedLayout } from '@/components/layout/ProtectedLayout'
+import { SupabaseProvider } from '@/components/layout/SupabaseProvider'
+import { SignInPage } from '@/components/auth/SignInPage'
+import { SignUpPage } from '@/components/auth/SignUpPage'
+import { LibraryView } from '@/components/Library/LibraryView'
+import { ReadingView } from '@/components/reading/ReadingView'
+import { SystemSettings } from '@/pages/SystemSettings'
+
+function SupabaseLayout() {
+  return (
+    <SupabaseProvider>
+      <Outlet />
+    </SupabaseProvider>
+  )
+}
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/sign-in/*" element={<SignInPage />} />
+      <Route path="/sign-up/*" element={<SignUpPage />} />
+
+      {/* Protected routes — auth checked, then Supabase initialized */}
+      <Route element={<ProtectedLayout />}>
+        <Route element={<SupabaseLayout />}>
+          <Route path="/library" element={<LibraryView />} />
+          <Route path="/settings" element={<SystemSettings />} />
+          <Route path="/read/:bookId" element={<ReadingView />} />
+          <Route path="/" element={<Navigate to="/library" replace />} />
+        </Route>
+      </Route>
+
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

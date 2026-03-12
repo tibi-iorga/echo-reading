@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react'
 
-export type TabKey = 'chat' | 'notes' | 'settings'
+export type TabKey = 'chat' | 'notes' | 'canvas'
 
 interface KeyboardShortcutsOptions {
   onNextPage?: () => void
@@ -56,7 +56,7 @@ export function useKeyboardShortcuts({
         onTogglePanel?.()
       }
 
-      // C/N/S: navigate to Chat, Notes, Settings (only when focus is not in an editable field)
+      // C/N/V: navigate to Chat, Notes, Canvas (only when focus is not in an editable field)
       if (onNavigateToTab && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (e.key === 'c') {
           e.preventDefault()
@@ -64,9 +64,9 @@ export function useKeyboardShortcuts({
         } else if (e.key === 'n') {
           e.preventDefault()
           onNavigateToTab('notes')
-        } else if (e.key === 's') {
+        } else if (e.key === 'v') {
           e.preventDefault()
-          onNavigateToTab('settings')
+          onNavigateToTab('canvas')
         }
       }
     },

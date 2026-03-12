@@ -2,14 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Annotation } from '@/types'
 import { AnnotationList } from './AnnotationList'
 import { Chat } from './Chat'
-import { SettingsPanel } from './SettingsPanel'
 import { Canvas } from './Canvas'
 import { ExportPreviewModal } from './ExportPreviewModal'
 import type { ExportFormat } from './ExportDropdown'
 import { FreeFormNoteModal } from './FreeFormNoteModal'
-import { UnsavedNotesWarning } from './UnsavedNotesWarning'
-import { fileSyncService } from '@/services/fileSync/fileSyncService'
-import { storageService } from '@/services/storage/storageService'
 
 interface NotesPanelProps {
   annotations: Annotation[]
@@ -19,8 +15,8 @@ interface NotesPanelProps {
   onExport: (format: ExportFormat) => void
   quotedText?: string | null
   onQuotedTextClear?: () => void
-  activeTab?: 'notes' | 'chat' | 'settings' | 'canvas'
-  onTabChange?: (tab: 'notes' | 'chat' | 'settings' | 'canvas') => void
+  activeTab?: 'notes' | 'chat' | 'canvas'
+  onTabChange?: (tab: 'notes' | 'chat' | 'canvas') => void
   onNavigateToPage?: (pageNumber: number) => void
   onUpdateHighlightNote?: (id: string, note: string) => void
   onUpdateNote?: (id: string, content: string, pageNumber?: number) => void
@@ -31,15 +27,10 @@ interface NotesPanelProps {
   currentPageText?: string
   numPages?: number
   pdfUrl?: string
-  pdfId?: string | null
-  onDocumentMetadataChange?: (metadata: { title: string; author: string | null }) => void
   onSaveInsight?: (text: string) => void
   onClearChat?: () => void
-  onReloadAnnotations?: () => void
+  onNewChatMessages?: (messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }>) => void
   resetFilterTrigger?: number
-  onExpandSyncFileSection?: () => void
-  expandSyncFileSection?: boolean
-  onSyncFileSectionExpanded?: () => void
   isCollapsed?: boolean
   onToggleCollapsed?: () => void
   canvasContent?: string
@@ -65,21 +56,16 @@ export function NotesPanel({
   currentPageText,
   numPages,
   pdfUrl,
-  pdfId,
-  onDocumentMetadataChange,
   onSaveInsight,
   onClearChat,
-  onReloadAnnotations,
+  onNewChatMessages,
   resetFilterTrigger,
-  onExpandSyncFileSection,
-  expandSyncFileSection,
-  onSyncFileSectionExpanded,
   isCollapsed,
   onToggleCollapsed,
   canvasContent,
   onCanvasContentChange,
 }: NotesPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'notes' | 'chat' | 'settings' | 'canvas'>('chat')
+  const [internalActiveTab, setInternalActiveTab] = useState<'notes' | 'chat' | 'canvas'>('chat')
   const activeTab = controlledActiveTab ?? internalActiveTab
   const setActiveTab = onTabChange ?? setInternalActiveTab
   const [showNoteModal, setShowNoteModal] = useState(false)
@@ -87,8 +73,6 @@ export function NotesPanel({
   const [editingNote, setEditingNote] = useState<{ id: string; content: string; pageNumber?: number } | null>(null)
   const [typeFilter, setTypeFilter] = useState<'all' | 'highlight' | 'note' | 'bookmark' | 'saved-from-chat'>('all')
   const prevResetFilterTriggerRef = useRef<number | undefined>(undefined)
-  const [hasSyncFile, setHasSyncFile] = useState<boolean>(false)
-  const [isWarningDismissed, setIsWarningDismissed] = useState<boolean>(false)
   const [useIconsOnly, setUseIconsOnly] = useState(false)
   const tabBarRef = useRef<HTMLDivElement>(null)
 
@@ -125,98 +109,7 @@ export function NotesPanel({
     }
   }, [resetFilterTrigger, activeTab])
 
-  // Check sync file status and warning dismissed state
-  useEffect(() => {
-    const checkSyncFile = async () => {
-      try {
-        await fileSyncService.initialize()
-        const hasSync = fileSyncService.hasSyncFile()
-        setHasSyncFile(hasSync)
-        // If sync file is created, clear dismissed state
-        if (hasSync) {
-          setIsWarningDismissed(false)
-          if (pdfId) {
-            storageService.setWarningDismissed(pdfId, false)
-          }
-        }
-      } catch (error) {
-        setHasSyncFile(false)
-      }
-    }
-    checkSyncFile()
-    
-    // Load dismissed state from storage
-    if (pdfId) {
-      setIsWarningDismissed(storageService.isWarningDismissed(pdfId))
-    }
-    
-    // Listen for sync file creation events
-    const handleSyncFileCreated = () => {
-      const hasSync = fileSyncService.hasSyncFile()
-      setHasSyncFile(hasSync)
-      // If sync file is created, clear dismissed state
-      if (hasSync) {
-        setIsWarningDismissed(false)
-        if (pdfId) {
-          storageService.setWarningDismissed(pdfId, false)
-        }
-      }
-    }
-    window.addEventListener('syncFileCreated', handleSyncFileCreated)
-    
-    // Recheck periodically and when annotations change (in case sync file was created)
-    const interval = setInterval(() => {
-      const hasSync = fileSyncService.hasSyncFile()
-      setHasSyncFile(hasSync)
-      // If sync file is created, clear dismissed state
-      if (hasSync) {
-        setIsWarningDismissed(false)
-        if (pdfId) {
-          storageService.setWarningDismissed(pdfId, false)
-        }
-      }
-    }, 2000)
-    
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('syncFileCreated', handleSyncFileCreated)
-    }
-  }, [annotations.length, pdfId])
-
-  // Listen for switch to settings event from Chat component
-  useEffect(() => {
-    const handleSwitchToSettings = () => {
-      setActiveTab('settings')
-    }
-    
-    window.addEventListener('switchToSettings', handleSwitchToSettings)
-    
-    return () => {
-      window.removeEventListener('switchToSettings', handleSwitchToSettings)
-    }
-  }, [setActiveTab])
-
-  const handleCreateSyncFile = () => {
-    if (onExpandSyncFileSection) {
-      onExpandSyncFileSection()
-    }
-  }
-
-  const handleDismissWarning = () => {
-    if (pdfId) {
-      storageService.setWarningDismissed(pdfId, true)
-      setIsWarningDismissed(true)
-    }
-  }
-
-  const handleRestoreWarning = () => {
-    if (pdfId) {
-      storageService.setWarningDismissed(pdfId, false)
-      setIsWarningDismissed(false)
-    }
-  }
-
-  const handleIconClick = (tab: 'notes' | 'chat' | 'settings' | 'canvas') => {
+  const handleIconClick = (tab: 'notes' | 'chat' | 'canvas') => {
     if (isCollapsed && onToggleCollapsed) {
       onToggleCollapsed()
     }
@@ -288,21 +181,6 @@ export function NotesPanel({
             </svg>
           </button>
 
-          {/* Settings icon */}
-          <button
-            onClick={() => handleIconClick('settings')}
-            className={`w-10 h-10 flex items-center justify-center rounded transition-colors focus:outline-none ${
-              activeTab === 'settings'
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
-            }`}
-            title="Settings"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
         </div>
       </div>
     )
@@ -393,34 +271,6 @@ export function NotesPanel({
               <div className="absolute bottom-[-5px] left-0 right-0 h-0.5 bg-blue-500 dark:bg-blue-400"></div>
             )}
           </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'settings'}
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center justify-center gap-2 relative flex-shrink-0 focus:outline-none ${
-              useIconsOnly 
-                ? 'w-10 h-10 rounded' 
-                : 'px-2 py-1 text-sm font-medium h-[28px]'
-            } ${
-              activeTab === 'settings'
-                ? useIconsOnly 
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                  : 'text-blue-600 dark:text-blue-400'
-                : useIconsOnly
-                  ? 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
-            title="Settings"
-          >
-            <svg className={useIconsOnly ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {!useIconsOnly && 'Settings'}
-            {activeTab === 'settings' && !useIconsOnly && (
-              <div className="absolute bottom-[-5px] left-0 right-0 h-0.5 bg-blue-500 dark:bg-blue-400"></div>
-            )}
-          </button>
         </div>
         {/* Spacer to push collapse button to the right */}
         <div className="flex-1 min-w-0" />
@@ -457,23 +307,6 @@ export function NotesPanel({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              {annotations.length > 0 && !hasSyncFile && isWarningDismissed && (
-                <button
-                  onClick={handleRestoreWarning}
-                  className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200 transition-colors focus:outline-none"
-                  aria-label="Show sync warning"
-                  title="Your notes are not synced"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                </button>
-              )}
               <button
                 onClick={() => {
                   setEditingNote(null)
@@ -498,13 +331,6 @@ export function NotesPanel({
               </button>
             </div>
           </div>
-          {/* Warning banner */}
-          {annotations.length > 0 && !hasSyncFile && activeTab === 'notes' && !isWarningDismissed && (
-            <UnsavedNotesWarning
-              onCreateSyncFile={handleCreateSyncFile}
-              onDismiss={handleDismissWarning}
-            />
-          )}
           {/* Content area */}
           <div className="flex-1 overflow-auto pt-4 px-4 pb-4">
             <AnnotationList
@@ -540,17 +366,7 @@ export function NotesPanel({
             pdfUrl={pdfUrl}
             onSaveInsight={onSaveInsight}
             onClearChat={onClearChat}
-          />
-        </div>
-
-        <div className={`flex-1 flex flex-col min-h-0 ${activeTab === 'settings' ? '' : 'hidden'}`}>
-          <SettingsPanel 
-            documentMetadata={documentMetadata}
-            pdfId={pdfId}
-            onDocumentMetadataChange={onDocumentMetadataChange}
-            onReloadAnnotations={onReloadAnnotations}
-            expandSyncFileSection={expandSyncFileSection}
-            onSyncFileSectionExpanded={onSyncFileSectionExpanded}
+            onNewMessages={onNewChatMessages}
           />
         </div>
 

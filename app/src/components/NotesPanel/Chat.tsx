@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { llmService } from '@/services/llm/llmService'
 import { storageService } from '@/services/storage/storageService'
 import { sanitizeError } from '@/services/llm/errorSanitizer'
@@ -27,6 +28,7 @@ interface ChatProps {
   pdfUrl?: string
   onSaveInsight?: (text: string) => void
   onClearChat?: () => void
+  onNewMessages?: (messages: Message[]) => void
 }
 
 interface QuotedMessageProps {
@@ -193,7 +195,8 @@ const PRESET_COMMANDS: PresetCommand[] = [
   { name: 'how', text: 'How does this work?', description: 'How does this work?' },
 ]
 
-export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages, onMessagesChange, documentMetadata, currentPage, currentPageText, numPages, pdfUrl, onSaveInsight, onClearChat }: ChatProps = {}) {
+export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages, onMessagesChange, documentMetadata, currentPage, currentPageText, numPages, pdfUrl, onSaveInsight, onClearChat, onNewMessages }: ChatProps = {}) {
+  const navigate = useNavigate()
   const [internalMessages, setInternalMessages] = useState<Message[]>([])
   const messages = externalMessages ?? internalMessages
   const setMessages = onMessagesChange ?? setInternalMessages
@@ -361,7 +364,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
 
     // Create user message with quoted text
     const userMessageObj: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: userMessage,
       quotedText: messageQuotedText,
@@ -370,6 +373,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
     // Add user message immediately
     const newMessages = [...messages, userMessageObj]
     setMessages(newMessages)
+    onNewMessages?.([userMessageObj])
 
     // Clear input and quoted text
     setInput('')
@@ -460,18 +464,22 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
       const response = await llmService.sendMessage(messageToSend, apiKey, model, systemInstructions || undefined, conversationHistory)
 
       // Add assistant response
-      setMessages([...newMessages, {
-        id: (Date.now() + 1).toString(),
+      const assistantMsg: Message = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: response,
-      }])
+      }
+      setMessages([...newMessages, assistantMsg])
+      onNewMessages?.([assistantMsg])
     } catch (error) {
       // Add error message (sanitized to prevent API key leakage)
-      setMessages([...newMessages, {
-        id: (Date.now() + 1).toString(),
+      const errorMsg: Message = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: `Error: ${sanitizeError(error)}`,
-      }])
+      }
+      setMessages([...newMessages, errorMsg])
+      onNewMessages?.([errorMsg])
     } finally {
       setIsLoading(false)
       // Refocus textarea after response completes
@@ -636,10 +644,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                   Please configure your API key in Settings to use the chat feature.
                 </p>
                 <button
-                  onClick={() => {
-                    // Dispatch event to switch to settings tab
-                    window.dispatchEvent(new CustomEvent('switchToSettings'))
-                  }}
+                  onClick={() => navigate('/settings')}
                   className="text-sm text-yellow-800 dark:text-yellow-200 font-medium hover:underline"
                 >
                   Go to Settings →

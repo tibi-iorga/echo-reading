@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
+import { BrowserRouter } from 'react-router-dom'
+import { ClerkProvider } from '@clerk/react'
+import { AppRoutes } from './AppRoutes'
 import './index.css'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { storageService } from './services/storage/storageService'
@@ -28,9 +30,13 @@ async function initializeApp() {
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
+      <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/sign-in">
+        <ThemeProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ThemeProvider>
+      </ClerkProvider>
     </React.StrictMode>,
   )
 }

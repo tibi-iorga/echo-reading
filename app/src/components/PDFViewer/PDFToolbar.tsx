@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
 import { ShortcutsModal } from '@/components/ShortcutsModal/ShortcutsModal'
+import { useTheme } from '@/contexts/ThemeContext'
 
 interface PDFToolbarProps {
   // Document controls
@@ -50,6 +51,7 @@ export function PDFToolbar({
   furthestPage,
   hasUnsavedChanges = false,
 }: PDFToolbarProps) {
+  const { theme, toggleTheme } = useTheme()
   const [isEditingPage, setIsEditingPage] = useState(false)
   const [pageInputValue, setPageInputValue] = useState(pageNumber.toString())
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
@@ -136,8 +138,8 @@ export function PDFToolbar({
   const disabledButtonClass = "w-9 h-9 flex items-center justify-center rounded text-gray-400 dark:text-gray-600 cursor-not-allowed"
 
   return (
-    <div className="relative flex items-center px-3 py-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 w-full flex-shrink-0">
-      {/* Left section: Close */}
+    <div className="relative flex items-center px-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 w-full flex-shrink-0 h-[61px]">
+      {/* Left section: Close + Theme */}
       <div className="flex items-center gap-1">
         {/* Close/Exit PDF - with confirmation */}
         <button
@@ -145,14 +147,31 @@ export function PDFToolbar({
           className={iconButtonClass}
           title={pdfFileName ? `Close: ${pdfFileName}` : 'Return to file picker'}
         >
-            {/* Home icon - return to file picker */}
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className={iconButtonClass}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
-          </button>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Center section: Page navigation - absolutely positioned for true centering */}
+      {numPages > 0 && (
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
         {/* Previous page */}
         <button
@@ -203,6 +222,7 @@ export function PDFToolbar({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Right section: Zoom controls, Reading position, Bookmark */}
       <div className="flex items-center gap-1 ml-auto">
@@ -261,7 +281,7 @@ export function PDFToolbar({
             </button>
             
             {showSyncMenu && (
-              <div className="absolute right-0 bottom-12 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]">
+              <div className="absolute right-0 top-12 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]">
                 {onSyncLastPage && (
                   <button
                     onClick={() => {

@@ -1,25 +1,26 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Annotation, TextSelection } from '@/types'
-import { storageService } from '@/services/storage/storageService'
+import * as supabaseService from '@/services/supabase/supabaseService'
 
-export function useAnnotations(pdfId: string | null) {
+export function useAnnotations(pdfId: string | null, userId?: string | null) {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
-  const [reloadTrigger, setReloadTrigger] = useState(0)
 
+  // Load annotations from Supabase
   useEffect(() => {
     if (pdfId) {
-      const stored = storageService.getAnnotations(pdfId)
-      setAnnotations(stored)
+      supabaseService.getAnnotations(pdfId)
+        .then(setAnnotations)
+        .catch((err) => {
+          console.warn('Failed to load annotations:', err)
+          setAnnotations([])
+        })
     } else {
       setAnnotations([])
     }
-  }, [pdfId, reloadTrigger])
-
-  const reloadAnnotations = useCallback(() => {
-    setReloadTrigger(prev => prev + 1)
-  }, [])
+  }, [pdfId])
 
   const addHighlight = useCallback((selection: TextSelection, note?: string, color?: string) => {
+    if (!pdfId || !userId) return
     const highlight: Annotation = {
       id: `highlight_${Date.now()}`,
       type: 'highlight',
@@ -28,30 +29,23 @@ export function useAnnotations(pdfId: string | null) {
       color,
       createdAt: new Date(),
     }
-    setAnnotations((prev) => {
-      const updated = [...prev, highlight]
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
-    })
-  }, [pdfId])
-  
+    setAnnotations((prev) => [...prev, highlight])
+    supabaseService.upsertAnnotation(pdfId, userId, highlight).catch(console.error)
+  }, [pdfId, userId])
+
   const updateHighlightNote = useCallback((id: string, note: string) => {
+    if (!pdfId || !userId) return
     setAnnotations((prev) => {
-      const updated = prev.map((a) => 
-        a.id === id && a.type === 'highlight' 
-          ? { ...a, note }
-          : a
-      )
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
+      const target = prev.find((a) => a.id === id && a.type === 'highlight')
+      if (!target) return prev
+      const updated = { ...target, note } as Annotation
+      supabaseService.upsertAnnotation(pdfId, userId, updated).catch(console.error)
+      return prev.map((a) => (a.id === id ? updated : a))
     })
-  }, [pdfId])
+  }, [pdfId, userId])
 
   const addNote = useCallback((content: string, pageNumber?: number) => {
+    if (!pdfId || !userId) return
     const note: Annotation = {
       id: `note_${Date.now()}`,
       type: 'note',
@@ -59,54 +53,36 @@ export function useAnnotations(pdfId: string | null) {
       pageNumber,
       createdAt: new Date(),
     }
-    setAnnotations((prev) => {
-      const updated = [...prev, note]
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
-    })
-  }, [pdfId])
+    setAnnotations((prev) => [...prev, note])
+    supabaseService.upsertAnnotation(pdfId, userId, note).catch(console.error)
+  }, [pdfId, userId])
 
   const updateNote = useCallback((id: string, content: string, pageNumber?: number) => {
+    if (!pdfId || !userId) return
     setAnnotations((prev) => {
-      const updated = prev.map((a) => 
-        a.id === id && a.type === 'note' 
-          ? { ...a, content, pageNumber }
-          : a
-      )
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
+      const target = prev.find((a) => a.id === id && a.type === 'note')
+      if (!target) return prev
+      const updated = { ...target, content, ...(pageNumber !== undefined ? { pageNumber } : {}) } as Annotation
+      supabaseService.upsertAnnotation(pdfId, userId, updated).catch(console.error)
+      return prev.map((a) => (a.id === id ? updated : a))
     })
-  }, [pdfId])
+  }, [pdfId, userId])
 
   const removeAnnotation = useCallback((id: string) => {
-    setAnnotations((prev) => {
-      const updated = prev.filter((a) => a.id !== id)
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
-    })
-  }, [pdfId])
+    if (!pdfId || !userId) return
+    setAnnotations((prev) => prev.filter((a) => a.id !== id))
+    supabaseService.deleteAnnotation(id).catch(console.error)
+  }, [pdfId, userId])
 
   const addBookmark = useCallback((pageNumber: number, pageText?: string) => {
-    setAnnotations((prev) => {
-      // Check if bookmark already exists for this page
-      const existingBookmark = prev.find(
-        (a) => a.type === 'bookmark' && a.pageNumber === pageNumber
-      )
-      if (existingBookmark) {
-        // Remove existing bookmark
-        const updated = prev.filter((a) => a.id !== existingBookmark.id)
-        if (pdfId) {
-          storageService.saveAnnotations(pdfId, updated).catch(console.error)
-        }
-        return updated
-      }
-      // Add new bookmark
+    if (!pdfId || !userId) return
+    const existingBookmark = annotations.find(
+      (a) => a.type === 'bookmark' && a.pageNumber === pageNumber
+    )
+    if (existingBookmark) {
+      setAnnotations((prev) => prev.filter((a) => a.id !== existingBookmark.id))
+      supabaseService.deleteAnnotation(existingBookmark.id).catch(console.error)
+    } else {
       const bookmark: Annotation = {
         id: `bookmark_${Date.now()}`,
         type: 'bookmark',
@@ -114,20 +90,16 @@ export function useAnnotations(pdfId: string | null) {
         ...(pageText ? { pageText } : {}),
         createdAt: new Date(),
       }
-      const updated = [...prev, bookmark]
-      if (pdfId) {
-        storageService.saveAnnotations(pdfId, updated).catch(console.error)
-      }
-      return updated
-    })
-  }, [pdfId])
+      setAnnotations((prev) => [...prev, bookmark])
+      supabaseService.upsertAnnotation(pdfId, userId, bookmark).catch(console.error)
+    }
+  }, [pdfId, userId, annotations])
 
   const clearAllAnnotations = useCallback(() => {
+    if (!pdfId || !userId) return
     setAnnotations([])
-    if (pdfId) {
-      storageService.saveAnnotations(pdfId, []).catch(console.error)
-    }
-  }, [pdfId])
+    supabaseService.saveAnnotations(pdfId, userId, []).catch(console.error)
+  }, [pdfId, userId])
 
   return {
     annotations,
@@ -138,6 +110,5 @@ export function useAnnotations(pdfId: string | null) {
     addBookmark,
     removeAnnotation,
     clearAllAnnotations,
-    reloadAnnotations,
   }
 }

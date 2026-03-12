@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@clerk/react'
 import { usePDF } from '@/hooks/usePDF'
 import { useAnnotations } from '@/hooks/useAnnotations'
 import { useCanvas } from '@/hooks/useCanvas'
@@ -6,40 +8,58 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { PDFViewer } from '@/components/PDFViewer/PDFViewer'
 import { PDFToolbar } from '@/components/PDFViewer/PDFToolbar'
 import { NotesPanel } from '@/components/NotesPanel/NotesPanel'
-import { FileSelector } from '@/components/FileSelector/FileSelector'
-import { OpenFileModal } from '@/components/OpenFileModal/OpenFileModal'
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle'
 import { exportToMarkdown, downloadMarkdown, exportToText, downloadText, exportToPDF, downloadPDF } from '@/utils/export'
-// import { llmService } from '@/services/llm/llmService' // Unused
 import { storageService } from '@/services/storage/storageService'
-import { fileSyncService } from '@/services/fileSync/fileSyncService'
-import { parseFilename } from '@/utils/filenameParser'
 import { extractPageText } from '@/utils/pdfTextExtractor'
 import { AlertModal } from '@/components/AlertModal/AlertModal'
-import type { Annotation } from '@/types'
+import * as supabaseService from '@/services/supabase/supabaseService'
+import type { BookRow } from '@/services/supabase/types'
 
-function App() {
-  const { pdf, loadPDF, clearPDF } = usePDF()
-  const pdfId = pdf ? `${pdf.file.name}_${pdf.file.size}` : null
-  const { annotations, addHighlight, updateHighlightNote, addNote, removeAnnotation, clearAllAnnotations, addBookmark, reloadAnnotations } = useAnnotations(pdfId)
-  const { canvasContent, updateCanvasContent, reloadCanvas } = useCanvas(pdfId)
+interface AppProps {
+  bookId: string
+  book: BookRow
+  pdfUrl: string
+}
+
+function App({ bookId, book, pdfUrl }: AppProps) {
+  const navigate = useNavigate()
+  const { userId } = useAuth()
+  const { pdf, loadPDFFromUrl } = usePDF()
+  const pdfId = bookId
+  const { annotations, addHighlight, updateHighlightNote, addNote, removeAnnotation, clearAllAnnotations, addBookmark } = useAnnotations(pdfId, userId)
+  const { canvasContent, updateCanvasContent } = useCanvas(pdfId, userId)
   const [_selectedText, setSelectedText] = useState<{ text: string; pageNumber: number } | null>(null)
   const [quotedText, setQuotedText] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'settings' | 'canvas'>('chat')
+  const [activeTab, setActiveTab] = useState<'notes' | 'chat' | 'canvas'>('chat')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false)
   const [scale, setScale] = useState<number>(1.5)
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }>>([])
   const [numPages, setNumPages] = useState<number>(0)
-  const [showOpenFileModal, setShowOpenFileModal] = useState(false)
-  const [documentMetadata, setDocumentMetadata] = useState<{ title: string; author: string | null } | null>(null)
+  const handleNumPagesChange = useCallback((n: number) => {
+    setNumPages(n)
+    // Persist to Supabase if not already stored
+    if (n > 0 && !book.num_pages) {
+      supabaseService.updateBook(bookId, { num_pages: n }).catch(() => {})
+    }
+  }, [bookId, book.num_pages])
+  const [documentMetadata, _setDocumentMetadata] = useState<{ title: string; author: string | null } | null>(
+    { title: book.title, author: book.author }
+  )
+
+  // Auto-load the PDF from signed URL on mount
+  useEffect(() => {
+    if (!pdf && pdfUrl) {
+      loadPDFFromUrl(pdfUrl)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [furthestPage, setFurthestPage] = useState<number | null>(null)
   const [lastPageRead, setLastPageRead] = useState<number | null>(null)
   const [currentPageText, setCurrentPageText] = useState<string>('')
   const pageTextCache = useRef<Map<number, string>>(new Map())
   const [sidebarWidth, setSidebarWidth] = useState<number>(384)
   const sidebarWidthDebounceRef = useRef<NodeJS.Timeout | null>(null)
-  const [expandSyncFileSection, setExpandSyncFileSection] = useState<boolean>(false)
   const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null)
   const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null)
   const [alertState, setAlertState] = useState<{ isOpen: boolean; message: string; variant?: 'error' | 'warning' | 'info' | 'success' }>({
@@ -144,50 +164,29 @@ function App() {
     setActiveTab('notes')
   }, [addHighlight])
 
-  const handleNavigateToPage = useCallback(async (pageNumber: number, isManualForward: boolean = false) => {
-    // Mark as manual forward navigation if navigating forward manually
+  const handleNavigateToPage = useCallback((pageNumber: number, isManualForward: boolean = false) => {
     if (isManualForward && pageNumber > currentPage) {
       isManualForwardNavigationRef.current = true
     } else {
       isManualForwardNavigationRef.current = false
     }
-    
+
     setCurrentPage(pageNumber)
+
     // Update furthest page if navigating forward
-    // Check sync file first (source of truth) before updating
-    if (pdfId && pageNumber > currentPage) {
-      // Check sync file's furthest page
-      let syncFileFurthestPage: number | null = null
-      try {
-        await fileSyncService.initialize()
-        if (fileSyncService.hasSyncFile()) {
-          const syncData = await fileSyncService.readSyncData()
-          syncFileFurthestPage = syncData.furthestPage ?? null
-        }
-      } catch (error) {
-        console.warn('Failed to check sync file for furthest page:', error)
-      }
-      
-      // Use sync file value as source of truth, fall back to localStorage
-      const currentFurthestPage = syncFileFurthestPage !== null ? syncFileFurthestPage : storageService.getFurthestPage(pdfId)
-      
-      // Only update if new page is greater than furthest page in sync file (or localStorage if no sync file)
-      if (currentFurthestPage === null || pageNumber > currentFurthestPage) {
-        await storageService.saveFurthestPage(pdfId, pageNumber)
-        setFurthestPage(pageNumber)
-      }
+    if (pageNumber > (furthestPage ?? 0)) {
+      setFurthestPage(pageNumber)
     }
-    // Update last page read only for manual forward navigation
-    if (pdfId && isManualForward && pageNumber > currentPage) {
-      storageService.saveLastPageRead(pdfId, pageNumber).catch(console.error)
+
+    // Update last page read for manual forward navigation
+    if (isManualForward && pageNumber > currentPage) {
       setLastPageRead(pageNumber)
     }
-    
-    // Reset flag after a short delay
+
     setTimeout(() => {
       isManualForwardNavigationRef.current = false
     }, 100)
-  }, [pdfId, currentPage])
+  }, [currentPage, furthestPage])
 
   const handleSendToLLM = useCallback((text: string) => {
     setQuotedText(text)
@@ -209,11 +208,10 @@ function App() {
   const handleClearChat = useCallback(() => {
     setChatMessages([])
     setQuotedText(null)
-    // Also clear from storage
-    if (pdfId) {
-      storageService.saveChatMessages(pdfId, [])
+    if (pdfId && userId) {
+      supabaseService.saveChatMessages(pdfId, userId, []).catch(console.warn)
     }
-  }, [pdfId])
+  }, [pdfId, userId])
 
   const handleSaveInsight = useCallback((text: string) => {
     // Save insight as a blue highlight with pageNumber 0 to indicate it's from chat
@@ -221,15 +219,6 @@ function App() {
     // Switch to highlights tab to show the saved insight
     setActiveTab('notes')
   }, [addHighlight])
-
-  const handleExpandSyncFileSection = useCallback(() => {
-    setActiveTab('settings')
-    setExpandSyncFileSection(true)
-  }, [])
-
-  const handleSyncFileSectionExpanded = useCallback(() => {
-    setExpandSyncFileSection(false)
-  }, [])
 
   const handleExport = useCallback((format: 'markdown' | 'pdf' | 'txt') => {
     if (annotations.length === 0) {
@@ -241,7 +230,7 @@ function App() {
       return
     }
 
-    const baseName = pdf ? pdf.file.name.replace('.pdf', '') : 'notes'
+    const baseName = book.filename.replace('.pdf', '') || 'notes'
     const metadata = documentMetadata ? { title: documentMetadata.title, author: documentMetadata.author } : undefined
 
     if (format === 'markdown') {
@@ -257,191 +246,45 @@ function App() {
     }
   }, [annotations, pdf, documentMetadata])
 
-  const handleOpenFileComplete = useCallback(async (
-    metadata: { title: string; author: string | null },
-    importedAnnotations: Annotation[],
-    fileHandle: FileSystemFileHandle | null,
-    fileName: string | null
-  ) => {
-    if (pdf) {
-      const pdfId = `${pdf.file.name}_${pdf.file.size}`
-      
-      // Save metadata
-      storageService.setDocumentMetadata(pdfId, metadata)
-      setDocumentMetadata(metadata)
-      
-      // Handle sync file
-      if (fileHandle && fileName) {
-        await fileSyncService.setSyncFile(fileHandle, fileName)
-        
-        // Load all data from sync file (source of truth) and update state/localStorage
-        isLoadingFromSyncFileRef.current = true
-        try {
-          const syncData = await fileSyncService.readSyncData()
-          
-          // Sync file is source of truth for page progress
-          if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
-            localStorage.setItem(`pdf_furthest_page_${pdfId}`, syncData.furthestPage.toString())
-            setFurthestPage(syncData.furthestPage)
-          }
-          
-          if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
-            await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
-            setLastPageRead(syncData.lastPageRead)
-            isManualForwardNavigationRef.current = false
-            setCurrentPage(syncData.lastPageRead)
-          }
-          
-          // Determine the canonical annotations: imported takes priority, then sync file content
-          const sourceAnnotations = importedAnnotations.length > 0
-            ? importedAnnotations
-            : syncData.annotations
-          
-          // Write back to sync file with updated metadata and canvas content
-          const localCanvasContent = storageService.getCanvasContent(pdfId)
-          await fileSyncService.writeSyncData({
-            ...syncData,
-            metadata,
-            annotations: sourceAnnotations,
-            furthestPage: syncData.furthestPage ?? null,
-            lastPageRead: syncData.lastPageRead ?? null,
-            canvasContent: syncData.canvasContent || localCanvasContent || null
-          })
-          
-          // Sync file is source of truth for annotations: always replace localStorage
-          // and reload, even if the sync file is empty. This ensures stale local
-          // annotations from a previous session or a different book are cleared.
-          await storageService.saveAnnotations(pdfId, sourceAnnotations)
-          reloadAnnotations()
-
-          // Load canvas content from sync file (write to localStorage directly to avoid circular sync)
-          if (syncData.canvasContent) {
-            localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
-            reloadCanvas()
-          }
-        } catch (error) {
-          console.warn('Failed to load from sync file:', error)
-          // If sync file read failed but we have imported annotations, use those
-          if (importedAnnotations.length > 0) {
-            await storageService.saveAnnotations(pdfId, importedAnnotations)
-            reloadAnnotations()
-          }
-        } finally {
-          setTimeout(() => {
-            isLoadingFromSyncFileRef.current = false
-          }, 1000)
-        }
-      
-      // Notify other components (e.g. SettingsPanel) that the sync file changed
-      window.dispatchEvent(new CustomEvent('syncFileChanged'))
-    } else {
-      // No sync file selected - user skipped
-      // Still save metadata to localStorage
-    }
-    
-    setShowOpenFileModal(false)
-    }
-  }, [pdf, reloadAnnotations, reloadCanvas])
-
-  const handleOpenFileCancel = useCallback(() => {
-    // User cancelled - clear the PDF and return to file selector
-    setShowOpenFileModal(false)
-    clearPDF()
-  }, [clearPDF])
-
   // Debounce timer refs for UI state
   const uiStateDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const isAutoSyncingRef = useRef<boolean>(false)
-  const isLoadingFromSyncFileRef = useRef<boolean>(false)
   const isManualForwardNavigationRef = useRef<boolean>(false)
 
-  // Load persisted data when PDF changes
+  // Load persisted data from Supabase when book loads
   useEffect(() => {
-    if (pdfId) {
-      const loadPersistedData = async () => {
-        // Load chat messages
-        const savedMessages = storageService.getChatMessages(pdfId)
+    if (!pdfId || !userId) return
+
+    const loadPersistedData = async () => {
+      try {
+        const [progress, savedMessages] = await Promise.all([
+          supabaseService.getReadingProgress(pdfId),
+          supabaseService.getChatMessages(pdfId),
+        ])
+
+        if (progress) {
+          isManualForwardNavigationRef.current = false
+          setCurrentPage(progress.currentPage)
+          setScale(progress.scale)
+          setFurthestPage(progress.furthestPage)
+          setLastPageRead(progress.lastPageRead)
+        }
+
         if (savedMessages.length > 0) {
-          setChatMessages(savedMessages)
+          setChatMessages(savedMessages.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            quotedText: m.quotedText,
+          })))
         }
-
-        // Load UI state (page, scale)
-        const savedUIState = storageService.getUIState(pdfId)
-        if (savedUIState) {
-          // Not manual forward navigation (loading persisted state)
-          isManualForwardNavigationRef.current = false
-          setCurrentPage(savedUIState.currentPage)
-          setScale(savedUIState.scale)
-        } else {
-          // Default scale if no saved state
-          setScale(1.5)
-        }
-
-        // Load furthest page and last page read - check sync file first (source of truth)
-        let savedFurthestPage: number | null = null
-        let savedLastPageRead: number | null = null
-
-        await fileSyncService.initialize()
-        if (fileSyncService.hasSyncFile()) {
-          isLoadingFromSyncFileRef.current = true
-          try {
-            const syncData = await fileSyncService.readSyncData()
-            // Sync file is source of truth - use values from sync file if available
-            // Don't sync back to file, just update localStorage and state
-            if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
-              savedFurthestPage = syncData.furthestPage
-              // Update localStorage directly without syncing back to file
-              localStorage.setItem(`pdf_furthest_page_${pdfId}`, savedFurthestPage.toString())
-            }
-            if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
-              savedLastPageRead = syncData.lastPageRead
-              // Update localStorage directly without syncing back to file
-              localStorage.setItem(`pdf_last_page_read_${pdfId}`, savedLastPageRead.toString())
-            }
-          } catch (error) {
-            console.warn('Failed to load page data from sync file, falling back to localStorage:', error)
-          } finally {
-            setTimeout(() => {
-              isLoadingFromSyncFileRef.current = false
-            }, 1000)
-          }
-        }
-
-        // Fallback to localStorage if sync file doesn't have values
-        if (savedFurthestPage === null) {
-          savedFurthestPage = storageService.getFurthestPage(pdfId)
-        }
-        if (savedLastPageRead === null) {
-          savedLastPageRead = storageService.getLastPageRead(pdfId)
-        }
-
-        setFurthestPage(savedFurthestPage)
-        setLastPageRead(savedLastPageRead)
-
-        // Auto sync to last page read if available
-        if (savedLastPageRead !== null && savedLastPageRead > 0) {
-          // Not manual forward navigation (loading persisted state)
-          isManualForwardNavigationRef.current = false
-          setCurrentPage(savedLastPageRead)
-        }
+      } catch (error) {
+        console.warn('Failed to load persisted data from Supabase:', error)
       }
-
-      loadPersistedData()
-
-      // Don't show import modal here - it will show after metadata modal is closed
-    } else {
-      // Clear when no PDF
-      setChatMessages([])
-      setCurrentPage(1)
-      setScale(1.5)
-      setFurthestPage(null)
-      setLastPageRead(null)
-      // Clear sync file handle to prevent stale data from the previous book
-      // bleeding into the next book opened. The sync file will be re-selected
-      // by the user in the OpenFileModal when the next book is opened.
-      fileSyncService.clearSyncFile().catch(console.error)
     }
-  }, [pdfId])
+
+    loadPersistedData()
+  }, [pdfId, userId])
 
   // Load global UI state on mount
   useEffect(() => {
@@ -456,122 +299,15 @@ function App() {
     setSidebarWidth(savedWidth)
   }, [])
 
-  // Reload page data from sync file when sync file changes
-  useEffect(() => {
-    const handleSyncFileChanged = async () => {
-      if (!pdfId) return
-      
-      isLoadingFromSyncFileRef.current = true
-      await fileSyncService.initialize()
-      if (fileSyncService.hasSyncFile()) {
-        try {
-          const syncData = await fileSyncService.readSyncData()
-          
-          // Load furthestPage and lastPageRead from sync file (source of truth)
-          // Don't sync back to file - just update localStorage and state
-          if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
-            localStorage.setItem(`pdf_furthest_page_${pdfId}`, syncData.furthestPage.toString())
-            setFurthestPage(syncData.furthestPage)
-          }
-          
-          if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
-            await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
-            setLastPageRead(syncData.lastPageRead)
-            // Navigate to last page read from sync file (override any localStorage value)
-            // Not manual forward navigation (loading from sync file)
-            isManualForwardNavigationRef.current = false
-            setCurrentPage(syncData.lastPageRead)
-          }
-
-          // Load canvas content from sync file (write to localStorage directly to avoid circular sync)
-          if (syncData.canvasContent) {
-            localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
-            reloadCanvas()
-          }
-        } catch (error) {
-          console.warn('Failed to reload page data from sync file:', error)
-        } finally {
-          setTimeout(() => {
-            isLoadingFromSyncFileRef.current = false
-          }, 1000)
-        }
-      }
-    }
-
-    window.addEventListener('syncFileChanged', handleSyncFileChanged)
-    return () => {
-      window.removeEventListener('syncFileChanged', handleSyncFileChanged)
-    }
-  }, [pdfId, reloadCanvas])
-
-  // Show OpenFileModal when PDF loads - sync file is source of truth
-  useEffect(() => {
-    if (pdf) {
-      const pdfId = `${pdf.file.name}_${pdf.file.size}`
-      
-        // Check sync file first (source of truth) for initial values
-        const loadInitialValues = async () => {
-          await fileSyncService.initialize()
-          let initialMetadata: { title: string; author: string | null } | null = null
-          
-          if (fileSyncService.hasSyncFile()) {
-            try {
-              const syncData = await fileSyncService.readSyncData()
-              if (syncData.metadata) {
-                initialMetadata = syncData.metadata
-              }
-              // Load furthest page and last page read from sync file and save to localStorage
-              if (syncData.furthestPage !== null && syncData.furthestPage !== undefined) {
-                await storageService.saveFurthestPage(pdfId, syncData.furthestPage)
-              }
-              if (syncData.lastPageRead !== null && syncData.lastPageRead !== undefined) {
-                await storageService.saveLastPageRead(pdfId, syncData.lastPageRead)
-              }
-              // Load canvas content from sync file
-              if (syncData.canvasContent) {
-                localStorage.setItem(`pdf_canvas_${pdfId}`, syncData.canvasContent)
-              }
-            } catch (error) {
-              // Fallback to localStorage
-              initialMetadata = storageService.getDocumentMetadata(pdfId)
-            }
-          } else {
-            // No sync file, check localStorage
-            initialMetadata = storageService.getDocumentMetadata(pdfId)
-          }
-          
-          // If no metadata found, parse filename
-          if (!initialMetadata) {
-            initialMetadata = parseFilename(pdf.file.name)
-          }
-          
-          setDocumentMetadata(initialMetadata)
-        
-        // Always show OpenFileModal after a short delay
-        const timer = setTimeout(() => {
-          setShowOpenFileModal(true)
-        }, 500)
-        return () => clearTimeout(timer)
-      }
-      
-      loadInitialValues()
-    } else {
-      setDocumentMetadata(null)
-      setShowOpenFileModal(false)
-    }
-  }, [pdf])
 
 
-  const handleMetadataChange = useCallback((metadata: { title: string; author: string | null }) => {
-    setDocumentMetadata(metadata)
-  }, [])
 
-  // Save chat messages when they change
-  useEffect(() => {
-    if (pdfId && chatMessages.length > 0) {
-      storageService.saveChatMessages(pdfId, chatMessages)
-    }
-  }, [pdfId, chatMessages])
+  const handleNewChatMessages = useCallback((newMessages: Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }>) => {
+    if (!pdfId || !userId) return
+    supabaseService.insertChatMessages(pdfId, userId, newMessages).catch(
+      (err) => console.warn('Failed to insert chat messages:', err)
+    )
+  }, [pdfId, userId])
 
   // Auto sync to furthest page when furthest page updates
   const previousFurthestPageRef = useRef<number | null>(null)
@@ -594,66 +330,44 @@ function App() {
     }
   }, [pdfId, furthestPage, currentPage])
 
-  // Save UI state (page, scale) with debouncing
+  // Save reading progress to Supabase with debouncing
   useEffect(() => {
-    if (pdfId) {
-      // Clear existing debounce timer
-      if (uiStateDebounceRef.current) {
-        clearTimeout(uiStateDebounceRef.current)
-      }
-      
-      // Set new debounce timer
-      uiStateDebounceRef.current = setTimeout(async () => {
-        // Don't update furthestPage if we're currently loading from sync file
-        if (isLoadingFromSyncFileRef.current) {
-          return
-        }
-        
-        storageService.saveUIState(pdfId, {
-          currentPage,
-          scale,
-        })
-        // Update furthest page when current page changes forward
-        // Check sync file first (source of truth), then localStorage
-        let currentFurthestPage: number | null = null
-        try {
-          await fileSyncService.initialize()
-          if (fileSyncService.hasSyncFile()) {
-            const syncData = await fileSyncService.readSyncData()
-            currentFurthestPage = syncData.furthestPage ?? null
-          }
-        } catch (error) {
-          // Fall back to localStorage if sync file check fails
-          console.warn('Failed to check sync file for furthest page:', error)
-        }
-        
-        // Fall back to localStorage if no sync file or sync file doesn't have furthestPage
-        if (currentFurthestPage === null) {
-          currentFurthestPage = storageService.getFurthestPage(pdfId)
-        }
-        
-        // Only update if current page is greater than furthest page stored in sync file (or localStorage if no sync file)
-        if (currentFurthestPage === null || currentPage > currentFurthestPage) {
-          await storageService.saveFurthestPage(pdfId, currentPage)
-          setFurthestPage(currentPage)
-        }
-        // Update last page read only for manual forward navigation
-        // Don't update for shortcuts (go to furthest page, go to last page read), bookmarks, or backward navigation
-        // Note: This is a fallback - manual forward navigation should save immediately in onNextPage/onPageChange
-        if (isManualForwardNavigationRef.current && currentPage > (lastPageRead ?? 0)) {
-          await storageService.saveLastPageRead(pdfId, currentPage)
-          setLastPageRead(currentPage)
-        }
-      }, 500) // 500ms debounce
+    if (!pdfId || !userId) return
+
+    if (uiStateDebounceRef.current) {
+      clearTimeout(uiStateDebounceRef.current)
     }
 
-    // Cleanup on unmount or dependency change
+    uiStateDebounceRef.current = setTimeout(() => {
+      // Update furthest page if current page is greater
+      const newFurthestPage = (furthestPage === null || currentPage > furthestPage) ? currentPage : furthestPage
+      if (newFurthestPage !== furthestPage) {
+        setFurthestPage(newFurthestPage)
+      }
+
+      // Update last page read for manual forward navigation
+      const newLastPageRead = (isManualForwardNavigationRef.current && currentPage > (lastPageRead ?? 0))
+        ? currentPage
+        : lastPageRead
+
+      if (newLastPageRead !== lastPageRead) {
+        setLastPageRead(newLastPageRead)
+      }
+
+      supabaseService.updateReadingProgress(pdfId, {
+        current_page: currentPage,
+        scale,
+        furthest_page: newFurthestPage ?? currentPage,
+        last_page_read: newLastPageRead ?? currentPage,
+      }).catch(err => console.warn('Failed to save reading progress:', err))
+    }, 500)
+
     return () => {
       if (uiStateDebounceRef.current) {
         clearTimeout(uiStateDebounceRef.current)
       }
     }
-  }, [pdfId, currentPage, scale, lastPageRead])
+  }, [pdfId, userId, currentPage, scale, lastPageRead, furthestPage])
 
   // Save global UI state when it changes
   useEffect(() => {
@@ -745,56 +459,26 @@ function App() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    onNextPage: async () => {
+    onNextPage: () => {
       if (currentPage < numPages) {
         const nextPage = currentPage + 1
-        // Mark as manual forward navigation
         isManualForwardNavigationRef.current = true
         setCurrentPage(nextPage)
-        // Update furthest page when navigating forward
-        // Check sync file first (source of truth) before updating
-        if (pdfId) {
-          let syncFileFurthestPage: number | null = null
-          try {
-            await fileSyncService.initialize()
-            if (fileSyncService.hasSyncFile()) {
-              const syncData = await fileSyncService.readSyncData()
-              syncFileFurthestPage = syncData.furthestPage ?? null
-            }
-          } catch (error) {
-            console.warn('Failed to check sync file for furthest page:', error)
-          }
-          
-          // Use sync file value as source of truth, fall back to localStorage
-          const currentFurthestPage = syncFileFurthestPage !== null ? syncFileFurthestPage : storageService.getFurthestPage(pdfId)
-          
-          // Only update if new page is greater than furthest page in sync file (or localStorage if no sync file)
-          if (currentFurthestPage === null || nextPage > currentFurthestPage) {
-            await storageService.saveFurthestPage(pdfId, nextPage)
-            setFurthestPage(nextPage)
-          }
-          
-          // Update last page read immediately for manual forward navigation
-          await storageService.saveLastPageRead(pdfId, nextPage)
-          setLastPageRead(nextPage)
+        if (nextPage > (furthestPage ?? 0)) {
+          setFurthestPage(nextPage)
         }
-        // Reset flag after a delay (longer than debounce to allow useEffect fallback)
+        setLastPageRead(nextPage)
         setTimeout(() => {
           isManualForwardNavigationRef.current = false
         }, 600)
       }
     },
-    onPreviousPage: async () => {
+    onPreviousPage: () => {
       if (currentPage > 1) {
         const prevPage = currentPage - 1
-        // Not manual forward navigation (going backward)
         isManualForwardNavigationRef.current = false
         setCurrentPage(prevPage)
-        // Update last page read when navigating backward with arrow keys
-        if (pdfId) {
-          await storageService.saveLastPageRead(pdfId, prevPage)
-          setLastPageRead(prevPage)
-        }
+        setLastPageRead(prevPage)
       }
     },
     onCloseSelection: () => {
@@ -820,113 +504,56 @@ function App() {
     enabled: !!pdf,
   })
 
-  // Handle page change with sync logic
-  const handleToolbarPageChange = useCallback(async (page: number) => {
-    // Page input is manual forward navigation if going forward
+  // Handle page change from toolbar
+  const handleToolbarPageChange = useCallback((page: number) => {
     const isForward = page > currentPage
-    if (isForward) {
-      isManualForwardNavigationRef.current = true
-    } else {
-      isManualForwardNavigationRef.current = false
-    }
+    isManualForwardNavigationRef.current = isForward
     setCurrentPage(page)
-    // Update furthest page when navigating forward
-    // Check sync file first (source of truth) before updating
-    if (pdfId && isForward) {
-      let syncFileFurthestPage: number | null = null
-      try {
-        await fileSyncService.initialize()
-        if (fileSyncService.hasSyncFile()) {
-          const syncData = await fileSyncService.readSyncData()
-          syncFileFurthestPage = syncData.furthestPage ?? null
-        }
-      } catch (error) {
-        console.warn('Failed to check sync file for furthest page:', error)
-      }
-      
-      // Use sync file value as source of truth, fall back to localStorage
-      const currentFurthestPage = syncFileFurthestPage !== null ? syncFileFurthestPage : storageService.getFurthestPage(pdfId)
-      
-      // Only update if new page is greater than furthest page in sync file (or localStorage if no sync file)
-      if (currentFurthestPage === null || page > currentFurthestPage) {
-        await storageService.saveFurthestPage(pdfId, page)
+
+    if (isForward) {
+      if (page > (furthestPage ?? 0)) {
         setFurthestPage(page)
       }
-      
-      // Update last page read immediately for manual forward navigation
-      await storageService.saveLastPageRead(pdfId, page)
       setLastPageRead(page)
     }
-    // Reset flag after a delay (longer than debounce to allow useEffect fallback)
+
     setTimeout(() => {
       isManualForwardNavigationRef.current = false
     }, 600)
-  }, [currentPage, pdfId])
+  }, [currentPage, furthestPage])
 
   // Handle sync to last page read
   const handleSyncLastPage = useCallback(() => {
     isManualForwardNavigationRef.current = false
-    if (pdfId !== null) {
-      const savedLastPageRead = storageService.getLastPageRead(pdfId)
-      if (savedLastPageRead !== null) {
-        setCurrentPage(savedLastPageRead)
-      }
+    if (lastPageRead !== null) {
+      setCurrentPage(lastPageRead)
     }
-  }, [pdfId])
+  }, [lastPageRead])
 
   // Handle sync to furthest page
   const handleSyncFurthestPage = useCallback(() => {
     isManualForwardNavigationRef.current = false
-    if (pdfId !== null) {
-      const savedFurthestPage = storageService.getFurthestPage(pdfId)
-      if (savedFurthestPage !== null) {
-        setCurrentPage(savedFurthestPage)
-      }
+    if (furthestPage !== null) {
+      setCurrentPage(furthestPage)
     }
-  }, [pdfId])
+  }, [furthestPage])
 
   if (!pdf) {
-    return <FileSelector onFileSelect={loadPDF} />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="text-gray-500 dark:text-gray-400">Loading PDF...</div>
+      </div>
+    )
   }
 
   return (
     <div className="flex h-screen overflow-hidden relative">
-      {pdf && showOpenFileModal && (
-        <OpenFileModal
-          isOpen={showOpenFileModal}
-          pdfFileName={pdf.file.name}
-          initialTitle={documentMetadata?.title || parseFilename(pdf.file.name).title}
-          initialAuthor={documentMetadata?.author || parseFilename(pdf.file.name).author}
-          onComplete={handleOpenFileComplete}
-          onCancel={handleOpenFileCancel}
-        />
-      )}
-      
-      {/* PDF Area (viewer + bottom toolbar) */}
+      {/* PDF Area (toolbar + viewer) */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* PDF Content Area */}
-        <div className="flex-1 min-h-0">
-          <PDFViewer
-            pdf={pdf}
-            onTextSelect={handleTextSelect}
-            onHighlight={handleHighlight}
-            onSendToLLM={handleSendToLLM}
-            highlights={annotations.filter((a): a is Extract<typeof a, { type: 'highlight' }> => a.type === 'highlight')}
-            onNavigateToPage={handleNavigateToPage}
-            currentPage={currentPage}
-            onPageChange={handleToolbarPageChange}
-            onPageDimensionsChange={handlePageDimensionsChange}
-            onContainerDimensionsChange={handleContainerDimensionsChange}
-            onNumPagesChange={setNumPages}
-            scale={scale}
-            onScaleChange={setScale}
-          />
-        </div>
-        
-        {/* Bottom Toolbar - only spans PDF area width */}
+        {/* Top Toolbar */}
         <PDFToolbar
-          onClose={clearPDF}
-          pdfFileName={pdf.file.name}
+          onClose={() => navigate('/library')}
+          pdfFileName={book.filename}
           pageNumber={currentPage}
           numPages={numPages}
           onPageChange={handleToolbarPageChange}
@@ -945,6 +572,25 @@ function App() {
           furthestPage={furthestPage}
           hasUnsavedChanges={annotations.length > 0}
         />
+
+        {/* PDF Content Area */}
+        <div className="flex-1 min-h-0">
+          <PDFViewer
+            pdf={pdf}
+            onTextSelect={handleTextSelect}
+            onHighlight={handleHighlight}
+            onSendToLLM={handleSendToLLM}
+            highlights={annotations.filter((a): a is Extract<typeof a, { type: 'highlight' }> => a.type === 'highlight')}
+            onNavigateToPage={handleNavigateToPage}
+            currentPage={currentPage}
+            onPageChange={handleToolbarPageChange}
+            onPageDimensionsChange={handlePageDimensionsChange}
+            onContainerDimensionsChange={handleContainerDimensionsChange}
+            onNumPagesChange={handleNumPagesChange}
+            scale={scale}
+            onScaleChange={setScale}
+          />
+        </div>
       </div>
       
       {/* Notes Panel - full height */}
@@ -987,13 +633,9 @@ function App() {
           currentPageText={currentPageText}
           numPages={numPages}
           pdfUrl={pdf?.url}
-          pdfId={pdfId}
-          onDocumentMetadataChange={handleMetadataChange}
           onSaveInsight={handleSaveInsight}
           onClearChat={handleClearChat}
-          onExpandSyncFileSection={handleExpandSyncFileSection}
-          expandSyncFileSection={expandSyncFileSection}
-          onSyncFileSectionExpanded={handleSyncFileSectionExpanded}
+          onNewChatMessages={handleNewChatMessages}
           isCollapsed={isPanelCollapsed}
           onToggleCollapsed={() => setIsPanelCollapsed(!isPanelCollapsed)}
           canvasContent={canvasContent}

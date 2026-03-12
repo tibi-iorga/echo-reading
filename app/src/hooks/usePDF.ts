@@ -11,28 +11,26 @@ export function usePDF() {
     setError(null)
 
     const url = URL.createObjectURL(file)
-    
-    const reader = new FileReader()
-    reader.onload = () => {
-      setPdf({
-        file,
-        url,
-        numPages: 0,
-      })
-      setLoading(false)
-    }
+    setPdf({
+      file,
+      url,
+      numPages: 0,
+    })
+    setLoading(false)
+  }, [])
 
-    reader.onerror = () => {
-      setError('Failed to load PDF')
-      setLoading(false)
-      URL.revokeObjectURL(url)
-    }
-
-    reader.readAsArrayBuffer(file)
+  const loadPDFFromUrl = useCallback((url: string) => {
+    setLoading(true)
+    setError(null)
+    setPdf({
+      url,
+      numPages: 0,
+    })
+    setLoading(false)
   }, [])
 
   const clearPDF = useCallback(() => {
-    if (pdf?.url) {
+    if (pdf?.file && pdf?.url) {
       URL.revokeObjectURL(pdf.url)
     }
     setPdf(null)
@@ -44,6 +42,7 @@ export function usePDF() {
     loading,
     error,
     loadPDF,
+    loadPDFFromUrl,
     clearPDF,
   }
 }

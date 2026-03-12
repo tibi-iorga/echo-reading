@@ -69,8 +69,8 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
                 <dd><kbd className={KBD_CLASS}>N</kbd></dd>
               </div>
               <div className={SHORTCUT_ROW_CLASS}>
-                <dt>Expand / collapse Settings</dt>
-                <dd><kbd className={KBD_CLASS}>S</kbd></dd>
+                <dt>Expand / collapse Canvas</dt>
+                <dd><kbd className={KBD_CLASS}>V</kbd></dd>
               </div>
               <div className={SHORTCUT_ROW_CLASS}>
                 <dt>Expand / collapse Panel</dt>

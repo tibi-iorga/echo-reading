@@ -58,7 +58,7 @@ export interface LLMProvider {
 }
 
 export interface PDFDocument {
-  file: File
+  file?: File
   url: string
   numPages: number
 }

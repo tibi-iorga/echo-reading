@@ -1,14 +1,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { storageService } from '@/services/storage/storageService'
+import * as supabaseService from '@/services/supabase/supabaseService'
 
-export function useCanvas(pdfId: string | null) {
+export function useCanvas(pdfId: string | null, userId?: string | null) {
   const [canvasContent, setCanvasContent] = useState<string>('')
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Load canvas content from Supabase
   useEffect(() => {
     if (pdfId) {
-      const stored = storageService.getCanvasContent(pdfId)
-      setCanvasContent(stored)
+      supabaseService.getCanvasContent(pdfId)
+        .then(setCanvasContent)
+        .catch((err) => {
+          console.warn('Failed to load canvas content:', err)
+          setCanvasContent('')
+        })
     } else {
       setCanvasContent('')
     }
@@ -26,23 +31,16 @@ export function useCanvas(pdfId: string | null) {
   const updateCanvasContent = useCallback((content: string) => {
     setCanvasContent(content)
 
-    // Debounce saves to localStorage (500ms)
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current)
     }
 
-    if (pdfId) {
+    if (pdfId && userId) {
       saveTimeoutRef.current = setTimeout(() => {
-        void storageService.saveCanvasContent(pdfId, content)
+        supabaseService.saveCanvasContent(pdfId, userId, content).catch(console.error)
       }, 500)
     }
-  }, [pdfId])
+  }, [pdfId, userId])
 
-  const reloadCanvas = useCallback(() => {
-    if (pdfId) {
-      setCanvasContent(storageService.getCanvasContent(pdfId))
-    }
-  }, [pdfId])
-
-  return { canvasContent, updateCanvasContent, reloadCanvas }
+  return { canvasContent, updateCanvasContent }
 }
