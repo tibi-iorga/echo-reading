@@ -52,9 +52,9 @@ Read, highlight, annotate, chat with your documents, and capture structured note
 
 ## Screenshots
 
-| Landing Page | App Mockup |
+| Library | Reading View |
 |---|---|
-| ![Landing](docs/screenshots/landing-hero.png) | ![App](docs/screenshots/landing-full.png) |
+| ![Library](docs/screenshots/library.png) | ![Reading](docs/screenshots/reading-view.png) |
 
 ## Tech Stack
 
