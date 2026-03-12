@@ -62,6 +62,20 @@ body {
   background-color: rgba(107, 114, 128, 0.5);
 }
 
+/* Landing page */
+.landing-page {
+  overflow-x: hidden;
+}
+
+@keyframes landing-glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.landing-glow {
+  animation: landing-glow-pulse 8s ease-in-out infinite;
+}
+
 /* TipTap Canvas editor styles */
 .canvas-editor {
   font-size: 1rem;
