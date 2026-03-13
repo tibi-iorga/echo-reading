@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Annotation } from '@/types'
 import { MarkdownRenderer } from '@/utils/markdownRenderer'
+import { fixMojibake } from '@/utils/textEncoding'
 
 interface AnnotationListProps {
   annotations: Annotation[]
@@ -250,10 +251,10 @@ export function AnnotationList({ annotations, filterType = 'all', onRemove, onNa
           {annotation.type === 'highlight' && (
             <div>
               {annotation.pageNumber === 0 ? (
-                <MarkdownRenderer content={annotation.text} className="text-base text-gray-800 dark:text-gray-200" />
+                <MarkdownRenderer content={fixMojibake(annotation.text)} className="text-base text-gray-800 dark:text-gray-200" />
               ) : (
                 <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed">
-                  {annotation.text}
+                  {fixMojibake(annotation.text)}
                 </p>
               )}
               {editingNoteId === annotation.id ? (

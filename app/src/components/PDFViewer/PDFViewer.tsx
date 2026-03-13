@@ -8,6 +8,7 @@ import { HighlightOverlay } from './HighlightOverlay'
 import { HighlightNoteModal } from './HighlightNoteModal'
 import { DictionaryPopup } from './DictionaryPopup'
 import { dictionaryService, type DictionaryDefinition } from '@/services/dictionary/dictionaryService'
+import { fixMojibake } from '@/utils/textEncoding'
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
 
@@ -185,7 +186,7 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
   const handleTextSelection = useCallback(() => {
     const selection = window.getSelection()
     if (selection && selection.toString().trim()) {
-      const text = selection.toString().trim()
+      const text = fixMojibake(selection.toString().trim())
       const range = selection.getRangeAt(0)
       
       // Find the PDF page wrapper and text layer elements
