@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Click-to-find highlight**: Clicking a highlight underline in the PDF scrolls to and briefly highlights the corresponding annotation in the notes panel
+- **Feedback link**: Library header now includes a link to the Featurebase feedback board
 
 ### Changed
 - Highlights now render as subtle underlines instead of semi-transparent background fills, eliminating subpixel anti-aliasing artifacts at edges
 - Close button navigates directly back to library without confirmation modal (all data auto-saves)
+- Library header uses text labels (Settings, Feedback) instead of icons for clarity
 
 ## [0.6.0] - 2026-03-12
 

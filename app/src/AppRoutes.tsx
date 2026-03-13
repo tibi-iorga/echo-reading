@@ -31,7 +31,7 @@ export function AppRoutes() {
         <Route element={<SupabaseLayout />}>
           <Route path="/library" element={<LibraryView />} />
           <Route path="/settings" element={<SystemSettings />} />
-          <Route path="/read/:bookId" element={<ReadingView />} />
+<Route path="/read/:bookId" element={<ReadingView />} />
         </Route>
       </Route>
 
