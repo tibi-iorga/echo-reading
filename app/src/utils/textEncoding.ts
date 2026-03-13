@@ -37,8 +37,9 @@ const win1252ToByte: Record<number, number> = {
 }
 
 export function fixMojibake(text: string): string {
-  // Quick check: if the text doesn't contain the telltale â€ pattern, skip
-  if (!text.includes('\u00E2\u20AC')) return text
+  // Quick check: look for â followed by either € (Windows-1252) or \x80 (Latin-1)
+  // These are the telltale first two bytes of a UTF-8 multi-byte sequence misinterpreted
+  if (!text.includes('\u00E2\u20AC') && !text.includes('\u00E2\u0080')) return text
 
   try {
     const bytes: number[] = []
