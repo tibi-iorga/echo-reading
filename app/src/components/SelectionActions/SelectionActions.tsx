@@ -29,9 +29,12 @@ export function SelectionActions({
     if (!menu) return
 
     const menuRect = menu.getBoundingClientRect()
+    // Check against the scroll container's visible top, not just the viewport.
+    // The menu is absolutely positioned inside a scrollable container that sits
+    // below the toolbar — if the menu overflows above that container, it gets clipped.
+    const containerTop = menu.offsetParent?.getBoundingClientRect().top ?? 0
 
-    // If the menu's top edge is clipped by the viewport, switch to showing below
-    if (menuRect.top < 0) {
+    if (menuRect.top < containerTop) {
       setShowBelow(true)
     }
   }, [position])
