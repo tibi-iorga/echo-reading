@@ -35,6 +35,8 @@ interface NotesPanelProps {
   onToggleCollapsed?: () => void
   canvasContent?: string
   onCanvasContentChange?: (content: string) => void
+  selectedAnnotationId?: string | null
+  onClearSelectedAnnotation?: () => void
 }
 
 export function NotesPanel({
@@ -64,6 +66,8 @@ export function NotesPanel({
   onToggleCollapsed,
   canvasContent,
   onCanvasContentChange,
+  selectedAnnotationId,
+  onClearSelectedAnnotation,
 }: NotesPanelProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<'notes' | 'chat' | 'canvas'>('chat')
   const activeTab = controlledActiveTab ?? internalActiveTab
@@ -108,6 +112,15 @@ export function NotesPanel({
       prevResetFilterTriggerRef.current = resetFilterTrigger
     }
   }, [resetFilterTrigger, activeTab])
+
+  // When a highlight is selected from the PDF, ensure the Notes tab shows it
+  useEffect(() => {
+    if (!selectedAnnotationId) return
+    // Switch filter to 'all' if current filter would hide the selected highlight
+    if (typeFilter !== 'all' && typeFilter !== 'highlight') {
+      setTypeFilter('all')
+    }
+  }, [selectedAnnotationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIconClick = (tab: 'notes' | 'chat' | 'canvas') => {
     if (isCollapsed && onToggleCollapsed) {
@@ -349,6 +362,8 @@ export function NotesPanel({
                 setEditingNote({ id, content, pageNumber })
                 setShowNoteModal(true)
               }}
+              selectedAnnotationId={selectedAnnotationId}
+              onClearSelectedAnnotation={onClearSelectedAnnotation}
             />
           </div>
         </div>

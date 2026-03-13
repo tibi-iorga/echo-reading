@@ -9,6 +9,8 @@ interface AnnotationListProps {
   onNavigateToPage?: (pageNumber: number) => void
   onUpdateHighlightNote?: (id: string, note: string) => void
   onEditNote?: (id: string, content: string, pageNumber?: number) => void
+  selectedAnnotationId?: string | null
+  onClearSelectedAnnotation?: () => void
 }
 
 interface OverflowMenuProps {
@@ -66,10 +68,23 @@ function OverflowMenu({ annotationId, isOpen, onToggle, items }: OverflowMenuPro
   )
 }
 
-export function AnnotationList({ annotations, filterType = 'all', onRemove, onNavigateToPage, onUpdateHighlightNote, onEditNote }: AnnotationListProps) {
+export function AnnotationList({ annotations, filterType = 'all', onRemove, onNavigateToPage, onUpdateHighlightNote, onEditNote, selectedAnnotationId, onClearSelectedAnnotation }: AnnotationListProps) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState('')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const annotationRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // Scroll to selected annotation when it changes
+  useEffect(() => {
+    if (!selectedAnnotationId) return
+    const el = annotationRefs.current.get(selectedAnnotationId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Clear selection after a brief highlight period
+      const timeout = setTimeout(() => onClearSelectedAnnotation?.(), 2000)
+      return () => clearTimeout(timeout)
+    }
+  }, [selectedAnnotationId, onClearSelectedAnnotation])
 
   const toggleMenu = useCallback((id: string) => {
     setOpenMenuId((prev) => (prev === id ? null : id))
@@ -152,7 +167,15 @@ export function AnnotationList({ annotations, filterType = 'all', onRemove, onNa
       {annotations.map((annotation) => (
         <div
           key={annotation.id}
-          className={`border-l-[3px] ${getAccentColor(annotation)} pl-3 pr-3 py-3 bg-gray-50 dark:bg-gray-800/60 rounded-r-lg hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors ${
+          ref={(el) => {
+            if (el) annotationRefs.current.set(annotation.id, el)
+            else annotationRefs.current.delete(annotation.id)
+          }}
+          className={`border-l-[3px] ${getAccentColor(annotation)} pl-3 pr-3 py-3 rounded-r-lg transition-all duration-300 ${
+            selectedAnnotationId === annotation.id
+              ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-600'
+              : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100/80 dark:hover:bg-gray-800'
+          } ${
             annotation.pageNumber && annotation.pageNumber !== 0
               ? 'cursor-pointer'
               : ''

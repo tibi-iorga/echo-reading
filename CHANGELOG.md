@@ -5,6 +5,15 @@ All notable changes to Echo will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-03-13
+
+### Added
+- **Click-to-find highlight**: Clicking a highlight underline in the PDF scrolls to and briefly highlights the corresponding annotation in the notes panel
+
+### Changed
+- Highlights now render as subtle underlines instead of semi-transparent background fills, eliminating subpixel anti-aliasing artifacts at edges
+- Close button navigates directly back to library without confirmation modal (all data auto-saves)
+
 ## [0.6.0] - 2026-03-12
 
 ### Added

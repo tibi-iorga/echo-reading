@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
 import { ShortcutsModal } from '@/components/ShortcutsModal/ShortcutsModal'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -49,12 +48,11 @@ export function PDFToolbar({
   onSyncFurthestPage,
   lastPageRead,
   furthestPage,
-  hasUnsavedChanges = false,
+  hasUnsavedChanges: _hasUnsavedChanges = false,
 }: PDFToolbarProps) {
   const { theme, toggleTheme } = useTheme()
   const [isEditingPage, setIsEditingPage] = useState(false)
   const [pageInputValue, setPageInputValue] = useState(pageNumber.toString())
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showSyncMenu, setShowSyncMenu] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -119,14 +117,6 @@ export function PDFToolbar({
   }
 
   const handleClose = () => {
-    if (hasUnsavedChanges) {
-      setShowCloseConfirm(true)
-    } else {
-      onClose()
-    }
-  }
-
-  const handleConfirmClose = () => {
     onClose()
   }
 
@@ -349,17 +339,6 @@ export function PDFToolbar({
         onClose={() => setShowShortcutsModal(false)}
       />
 
-      {/* Close Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showCloseConfirm}
-        title="Close Document"
-        message="Are you sure you want to close this document?"
-        confirmText="Close"
-        cancelText="Cancel"
-        onConfirm={handleConfirmClose}
-        onCancel={() => setShowCloseConfirm(false)}
-        variant="danger"
-      />
     </div>
   )
 }

@@ -26,9 +26,11 @@ interface PDFViewerProps {
   onPageDimensionsChange?: (dimensions: { width: number; height: number } | null) => void
   containerRef?: React.RefObject<HTMLDivElement>
   onContainerDimensionsChange?: (dimensions: { width: number; height: number } | null) => void
+  onHighlightClick?: (highlightId: string) => void
+  selectedHighlightId?: string | null
 }
 
-export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange: _onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, scale: externalScale, onPageDimensionsChange, containerRef: externalContainerRef, onContainerDimensionsChange }: PDFViewerProps) {
+export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange: _onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, scale: externalScale, onPageDimensionsChange, containerRef: externalContainerRef, onContainerDimensionsChange, onHighlightClick, selectedHighlightId }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [_internalScale, _setInternalScale] = useState<number>(1.0)
@@ -459,6 +461,8 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
                 highlights={highlights}
                 currentPage={pageNumber}
                 scale={scale}
+                onHighlightClick={onHighlightClick}
+                selectedHighlightId={selectedHighlightId}
               />
             </div>
 

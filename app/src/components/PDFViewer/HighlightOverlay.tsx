@@ -4,12 +4,15 @@ interface HighlightOverlayProps {
   highlights: Array<{ id: string; pageNumber: number; coordinates?: { x: number; y: number; width: number; height: number; rects?: Array<{ x: number; y: number; width: number; height: number }> } }>
   currentPage: number
   scale: number
+  onHighlightClick?: (highlightId: string) => void
+  selectedHighlightId?: string | null
 }
 
-export function HighlightOverlay({ highlights, currentPage, scale }: HighlightOverlayProps) {
+export function HighlightOverlay({ highlights, currentPage, scale, onHighlightClick, selectedHighlightId }: HighlightOverlayProps) {
   const [pageHighlights, setPageHighlights] = useState<Array<{ id: string; coordinates: { x: number; y: number; width: number; height: number; rects?: Array<{ x: number; y: number; width: number; height: number }> } }>>([])
   const [textLayerOffset, setTextLayerOffset] = useState<{ x: number; y: number } | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null)
 
   // Separate effect to calculate text layer offset
   useEffect(() => {
@@ -112,6 +115,9 @@ export function HighlightOverlay({ highlights, currentPage, scale }: HighlightOv
               height: highlight.coordinates.height,
             }]
         
+        const isSelected = selectedHighlightId === highlight.id
+        const isClickable = !!onHighlightClick
+
         return (
           <React.Fragment key={highlight.id}>
             {rectsToRender.map((rect, index) => {
@@ -119,21 +125,36 @@ export function HighlightOverlay({ highlights, currentPage, scale }: HighlightOv
               const renderedTop = rect.y * scale
               const renderedWidth = rect.width * scale
               const renderedHeight = rect.height * scale
-              
-              const renderedStyle = {
-                position: 'absolute' as const,
+
+              const renderedStyle: React.CSSProperties = {
+                position: 'absolute',
                 left: `${renderedLeft}px`,
-                top: `${renderedTop}px`,
+                top: `${renderedTop + renderedHeight - 3}px`,
                 width: `${renderedWidth}px`,
-                height: `${renderedHeight}px`,
-                backgroundColor: 'rgba(253, 224, 71, 0.4)',
-                pointerEvents: 'none' as const,
+                height: '3px',
+                backgroundColor: isSelected ? 'rgba(253, 224, 71, 0.9)' : 'rgba(253, 224, 71, 0.7)',
+                borderRadius: '1.5px',
+                pointerEvents: isClickable ? 'auto' : 'none',
+                cursor: isClickable ? 'pointer' : undefined,
+                transition: 'background-color 0.15s ease',
               }
-              
+
               return (
                 <div
                   key={`${highlight.id}-rect-${index}`}
                   style={renderedStyle}
+                  onMouseDown={isClickable ? (e) => {
+                    mouseDownPosRef.current = { x: e.clientX, y: e.clientY }
+                  } : undefined}
+                  onMouseUp={isClickable ? (e) => {
+                    // Only fire click if mouse didn't move (not a text selection drag)
+                    const down = mouseDownPosRef.current
+                    if (down && Math.abs(e.clientX - down.x) < 5 && Math.abs(e.clientY - down.y) < 5) {
+                      e.stopPropagation()
+                      onHighlightClick!(highlight.id)
+                    }
+                    mouseDownPosRef.current = null
+                  } : undefined}
                 />
               )
             })}

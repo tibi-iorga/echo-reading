@@ -36,6 +36,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false)
   const [scale, setScale] = useState<number>(1.5)
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }>>([])
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null)
   const [numPages, setNumPages] = useState<number>(0)
   const handleNumPagesChange = useCallback((n: number) => {
     setNumPages(n)
@@ -163,6 +164,11 @@ function App({ bookId, book, pdfUrl }: AppProps) {
     setSelectedText(null)
     setActiveTab('notes')
   }, [addHighlight])
+
+  const handleHighlightClick = useCallback((highlightId: string) => {
+    setSelectedAnnotationId(highlightId)
+    setActiveTab('notes')
+  }, [])
 
   const handleNavigateToPage = useCallback((pageNumber: number, isManualForward: boolean = false) => {
     if (isManualForward && pageNumber > currentPage) {
@@ -591,6 +597,8 @@ function App({ bookId, book, pdfUrl }: AppProps) {
             onNumPagesChange={handleNumPagesChange}
             scale={scale}
             onScaleChange={setScale}
+            onHighlightClick={handleHighlightClick}
+            selectedHighlightId={selectedAnnotationId}
           />
         </div>
       </div>
@@ -642,6 +650,8 @@ function App({ bookId, book, pdfUrl }: AppProps) {
           onToggleCollapsed={() => setIsPanelCollapsed(!isPanelCollapsed)}
           canvasContent={canvasContent}
           onCanvasContentChange={updateCanvasContent}
+          selectedAnnotationId={selectedAnnotationId}
+          onClearSelectedAnnotation={() => setSelectedAnnotationId(null)}
         />
       </div>
 
