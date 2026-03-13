@@ -249,6 +249,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   // Debounce timer refs for UI state
   const uiStateDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const isAutoSyncingRef = useRef<boolean>(false)
+  const previousFurthestPageRef = useRef<number | null>(null)
   const isManualForwardNavigationRef = useRef<boolean>(false)
 
   // Load persisted data from Supabase when book loads
@@ -264,6 +265,8 @@ function App({ bookId, book, pdfUrl }: AppProps) {
 
         if (progress) {
           isManualForwardNavigationRef.current = false
+          // Set ref before state so auto-sync effect doesn't treat loaded value as new
+          previousFurthestPageRef.current = progress.furthestPage
           setCurrentPage(progress.currentPage)
           setScale(progress.scale)
           setFurthestPage(progress.furthestPage)
@@ -310,7 +313,6 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   }, [pdfId, userId])
 
   // Auto sync to furthest page when furthest page updates
-  const previousFurthestPageRef = useRef<number | null>(null)
   useEffect(() => {
     if (pdfId && furthestPage !== null && furthestPage > currentPage) {
       // Only auto-sync if furthest page was updated (not if it's the same)

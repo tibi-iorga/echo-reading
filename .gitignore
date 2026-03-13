@@ -100,3 +100,4 @@ credentials/
 .parcel-cache/
 .eslintcache
 .stylelintcache
+.vercel

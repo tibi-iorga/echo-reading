@@ -80,3 +80,4 @@ credentials/
 .eslintcache
 .stylelintcache
 .vite/
+.vercel
