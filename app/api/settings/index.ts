@@ -32,25 +32,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === "PUT") {
       const settings = req.body;
 
-      const values: Record<string, unknown> = { clerkUserId: userId };
-      if (settings.active_tab !== undefined) values.activeTab = settings.active_tab;
-      if (settings.is_panel_collapsed !== undefined) values.isPanelCollapsed = settings.is_panel_collapsed;
-      if (settings.sidebar_width !== undefined) values.sidebarWidth = settings.sidebar_width;
-      if (settings.theme !== undefined) values.theme = settings.theme;
-      if (settings.chat_instructions !== undefined) values.chatInstructions = settings.chat_instructions;
-      if (settings.llm_provider !== undefined) values.llmProvider = settings.llm_provider;
-      if (settings.llm_model !== undefined) values.llmModel = settings.llm_model;
+      const insertValues = {
+        clerkUserId: userId,
+        activeTab: settings.active_tab as string | undefined,
+        isPanelCollapsed: settings.is_panel_collapsed as boolean | undefined,
+        sidebarWidth: settings.sidebar_width as number | undefined,
+        theme: settings.theme as string | undefined,
+        chatInstructions: settings.chat_instructions as string | undefined,
+        llmProvider: settings.llm_provider as string | undefined,
+        llmModel: settings.llm_model as string | undefined,
+      };
 
-      const updateValues = { ...values };
-      delete updateValues.clerkUserId;
-      updateValues.updatedAt = new Date();
+      const { clerkUserId: _, ...updateFields } = insertValues;
 
       await db
         .insert(userSettings)
-        .values(values)
+        .values(insertValues)
         .onConflictDoUpdate({
           target: userSettings.clerkUserId,
-          set: updateValues,
+          set: { ...updateFields, updatedAt: new Date() },
         });
 
       return res.status(200).json({ ok: true });

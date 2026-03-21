@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === "POST") {
       const { id, title, author, filename, file_size, storage_path, cover_path, num_pages } = req.body;
 
-      const values: Record<string, unknown> = {
+      const values = {
         clerkUserId: userId,
         title,
         author: author ?? null,
@@ -36,11 +36,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         storagePath: storage_path,
         coverPath: cover_path ?? null,
         numPages: num_pages ?? null,
+        ...(id ? { id } : {}),
       };
-
-      if (id) {
-        values.id = id;
-      }
 
       const result = await db.insert(books).values(values).returning();
       return res.status(201).json(result[0]);
