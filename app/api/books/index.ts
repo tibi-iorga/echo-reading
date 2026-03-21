@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { books, readingProgress } from "../_lib/schema.js";
+import { toSnake } from "../_lib/casing.js";
 import { eq, desc } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -17,8 +18,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .orderBy(desc(books.updatedAt));
 
       const result = rows.map((row) => ({
-        ...row.books,
-        reading_progress: row.reading_progress ?? null,
+        ...toSnake(row.books as unknown as Record<string, unknown>),
+        reading_progress: row.reading_progress
+          ? toSnake(row.reading_progress as unknown as Record<string, unknown>)
+          : null,
       }));
 
       return res.status(200).json(result);
@@ -40,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       const result = await db.insert(books).values(values).returning();
-      return res.status(201).json(result[0]);
+      return res.status(201).json(toSnake(result[0] as unknown as Record<string, unknown>));
     }
 
     return res.status(405).json({ error: "Method not allowed" });

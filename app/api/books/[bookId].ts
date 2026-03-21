@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { books } from "../_lib/schema.js";
+import { toSnake } from "../_lib/casing.js";
 import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { eq, and } from "drizzle-orm";
@@ -19,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .limit(1);
 
       if (result.length === 0) return res.status(404).json({ error: "Book not found" });
-      return res.status(200).json(result[0]);
+      return res.status(200).json(toSnake(result[0] as unknown as Record<string, unknown>));
     }
 
     if (req.method === "PATCH") {
