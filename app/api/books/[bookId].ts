@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticate, AuthError } from "../_lib/auth";
-import { db } from "../_lib/db";
-import { books } from "../_lib/schema";
-import { r2, R2_BUCKET } from "../_lib/r2";
+import { authenticate, AuthError } from "../_lib/auth.js";
+import { db } from "../_lib/db.js";
+import { books } from "../_lib/schema.js";
+import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { eq, and } from "drizzle-orm";
 
