@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout'
-import { SupabaseProvider } from '@/components/layout/SupabaseProvider'
+import { ApiProvider } from '@/components/layout/ApiProvider'
 import { SignInPage } from '@/components/auth/SignInPage'
 import { SignUpPage } from '@/components/auth/SignUpPage'
 import { LandingPage } from '@/components/landing/LandingPage'
@@ -9,11 +9,11 @@ import { ReadingView } from '@/components/reading/ReadingView'
 import { SystemSettings } from '@/pages/SystemSettings'
 import { PrivacyPolicy } from '@/pages/PrivacyPolicy'
 
-function SupabaseLayout() {
+function ApiLayout() {
   return (
-    <SupabaseProvider>
+    <ApiProvider>
       <Outlet />
-    </SupabaseProvider>
+    </ApiProvider>
   )
 }
 
@@ -26,9 +26,9 @@ export function AppRoutes() {
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
 
-      {/* Protected routes — auth checked, then Supabase initialized */}
+      {/* Protected routes — auth checked, then API initialized */}
       <Route element={<ProtectedLayout />}>
-        <Route element={<SupabaseLayout />}>
+        <Route element={<ApiLayout />}>
           <Route path="/library" element={<LibraryView />} />
           <Route path="/settings" element={<SystemSettings />} />
 <Route path="/read/:bookId" element={<ReadingView />} />

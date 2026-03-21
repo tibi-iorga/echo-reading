@@ -13,8 +13,8 @@ import { exportToMarkdown, downloadMarkdown, exportToText, downloadText, exportT
 import { storageService } from '@/services/storage/storageService'
 import { extractPageText } from '@/utils/pdfTextExtractor'
 import { AlertModal } from '@/components/AlertModal/AlertModal'
-import * as supabaseService from '@/services/supabase/supabaseService'
-import type { BookRow } from '@/services/supabase/types'
+import * as supabaseService from '@/services/api/apiService'
+import type { BookRow } from '@/services/api/types'
 
 interface AppProps {
   bookId: string

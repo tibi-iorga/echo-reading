@@ -7,8 +7,8 @@ import { BookCard } from './BookCard'
 import { UploadModal } from './UploadModal'
 import { EditBookModal } from './EditBookModal'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
-import * as supabaseService from '@/services/supabase/supabaseService'
-import type { BookRow } from '@/services/supabase/types'
+import * as supabaseService from '@/services/api/apiService'
+import type { BookRow } from '@/services/api/types'
 
 export function LibraryView() {
   const navigate = useNavigate()

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
 import { storageService } from '@/services/storage/storageService'
 import { llmService } from '@/services/llm/llmService'
-import * as supabaseService from '@/services/supabase/supabaseService'
+import * as supabaseService from '@/services/api/apiService'
 
 interface SystemSettings {
   theme: 'light' | 'dark'

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
-import * as supabaseService from '@/services/supabase/supabaseService'
-import type { BookRow, BookWithProgress } from '@/services/supabase/types'
+import * as supabaseService from '@/services/api/apiService'
+import type { BookRow, BookWithProgress } from '@/services/api/types'
 
 export function useLibrary() {
   const { userId } = useAuth()

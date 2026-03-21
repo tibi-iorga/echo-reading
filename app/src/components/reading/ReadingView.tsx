@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import * as supabaseService from '@/services/supabase/supabaseService'
-import type { BookRow } from '@/services/supabase/types'
+import * as supabaseService from '@/services/api/apiService'
+import type { BookRow } from '@/services/api/types'
 import App from '@/App'
 
 const SIGNED_URL_CACHE_MAX = 10

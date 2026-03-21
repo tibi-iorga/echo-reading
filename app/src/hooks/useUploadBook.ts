@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
-import * as supabaseService from '@/services/supabase/supabaseService'
-import type { BookRow } from '@/services/supabase/types'
+import * as supabaseService from '@/services/api/apiService'
+import type { BookRow } from '@/services/api/types'
 import { parseFilename } from '@/utils/filenameParser'
 import { extractPdfCover } from '@/utils/pdfCoverExtractor'
 

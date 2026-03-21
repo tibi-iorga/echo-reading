@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { BookWithProgress } from '@/services/supabase/types'
+import type { BookWithProgress } from '@/services/api/types'
 
 interface BookCardProps {
   book: BookWithProgress

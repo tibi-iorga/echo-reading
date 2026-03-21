@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import * as supabaseService from '@/services/supabase/supabaseService'
+import * as supabaseService from '@/services/api/apiService'
 
 export function useCanvas(pdfId: string | null, userId?: string | null) {
   const [canvasContent, setCanvasContent] = useState<string>('')

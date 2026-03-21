@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Annotation, TextSelection } from '@/types'
-import * as supabaseService from '@/services/supabase/supabaseService'
+import * as supabaseService from '@/services/api/apiService'
 
 export function useAnnotations(pdfId: string | null, userId?: string | null) {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
