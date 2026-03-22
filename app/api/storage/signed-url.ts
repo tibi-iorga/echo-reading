@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
+import { db } from "../_lib/db.js";
+import { books } from "../_lib/schema.js";
 import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { eq, and, or } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -14,10 +17,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const path = req.query.path as string;
 
-    // Ensure the path belongs to this user
-    if (!path.startsWith(`${userId}/`)) {
-      console.error("Path ownership check failed:", { userId, pathPrefix: path.split("/")[0] });
-      return res.status(403).json({ error: "Access denied", debug: { userId, pathPrefix: path.split("/")[0] } });
+    // Verify the user owns a book with this storage_path or cover_path
+    const owned = await db
+      .select({ id: books.id })
+      .from(books)
+      .where(and(
+        eq(books.clerkUserId, userId),
+        or(eq(books.storagePath, path), eq(books.coverPath, path))
+      ))
+      .limit(1);
+
+    if (owned.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     const command = new GetObjectCommand({

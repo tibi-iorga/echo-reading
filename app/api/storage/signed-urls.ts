@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
+import { db } from "../_lib/db.js";
+import { books } from "../_lib/schema.js";
 import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { eq, inArray, and } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -18,12 +21,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ urls: {} });
     }
 
+    // Verify which paths belong to this user via the database
+    const ownedBooks = await db
+      .select({ coverPath: books.coverPath })
+      .from(books)
+      .where(and(eq(books.clerkUserId, userId), inArray(books.coverPath, paths)));
+
+    const ownedPaths = new Set(ownedBooks.map((b) => b.coverPath).filter(Boolean));
+
     const urls: Record<string, string> = {};
 
     await Promise.all(
       paths.map(async (path) => {
-        // Only sign paths belonging to this user
-        if (!path.startsWith(`${userId}/`)) return;
+        if (!ownedPaths.has(path)) return;
 
         const command = new GetObjectCommand({
           Bucket: R2_BUCKET,
