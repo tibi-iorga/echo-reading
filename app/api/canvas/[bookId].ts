@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { canvasContent } from "../_lib/schema.js";
+import { parseBookId, parseBody, CanvasContentSchema } from "../_lib/validate.js";
 import { eq, and } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const userId = await authenticate(req.headers.authorization);
-    const bookId = req.query.bookId as string;
+    const bookId = parseBookId(req, res);
+    if (!bookId) return;
 
     if (req.method === "GET") {
       const result = await db
@@ -20,7 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "PUT") {
-      const { content } = req.body;
+      const data = parseBody(CanvasContentSchema, req.body, res);
+      if (!data) return;
+      const { content } = data;
 
       await db
         .insert(canvasContent)

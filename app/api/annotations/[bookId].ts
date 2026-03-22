@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { annotations } from "../_lib/schema.js";
+import { parseBookId, parseBody, AnnotationSchema, AnnotationListSchema } from "../_lib/validate.js";
 import { eq, and, asc } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const userId = await authenticate(req.headers.authorization);
-    const bookId = req.query.bookId as string;
+    const bookId = parseBookId(req, res);
+    if (!bookId) return;
 
     if (req.method === "GET") {
       const rows = await db
@@ -26,7 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // PUT — full replace all annotations for a book
     if (req.method === "PUT") {
-      const { annotations: annotationList } = req.body;
+      const data = parseBody(AnnotationListSchema, req.body, res);
+      if (!data) return;
+      const { annotations: annotationList } = data;
 
       // Delete all existing
       await db
@@ -50,7 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST — upsert single annotation
     if (req.method === "POST") {
-      const annotation = req.body;
+      const annotation = parseBody(AnnotationSchema, req.body, res);
+      if (!annotation) return;
 
       await db
         .insert(annotations)

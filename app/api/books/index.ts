@@ -3,6 +3,7 @@ import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { books, readingProgress } from "../_lib/schema.js";
 import { toSnake } from "../_lib/casing.js";
+import { parseBody, CreateBookSchema } from "../_lib/validate.js";
 import { eq, desc } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -28,7 +29,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "POST") {
-      const { id, title, author, filename, file_size, storage_path, cover_path, num_pages } = req.body;
+      const data = parseBody(CreateBookSchema, req.body, res);
+      if (!data) return;
+      const { id, title, author, filename, file_size, storage_path, cover_path, num_pages } = data;
 
       const values = {
         clerkUserId: userId,

@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { readingProgress } from "../_lib/schema.js";
+import { parseBookId, parseBody, ProgressUpsertSchema } from "../_lib/validate.js";
 import { eq, and } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const userId = await authenticate(req.headers.authorization);
-    const bookId = req.query.bookId as string;
+    const bookId = parseBookId(req, res);
+    if (!bookId) return;
 
     if (req.method === "GET") {
       const result = await db
@@ -28,7 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // PUT — upsert full progress
     if (req.method === "PUT") {
-      const { current_page, furthest_page, last_page_read, scale } = req.body;
+      const data = parseBody(ProgressUpsertSchema, req.body, res);
+      if (!data) return;
+      const { current_page, furthest_page, last_page_read, scale } = data;
 
       await db
         .insert(readingProgress)
@@ -56,12 +60,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // PATCH — partial update
     if (req.method === "PATCH") {
+      const data = parseBody(ProgressUpsertSchema, req.body, res);
+      if (!data) return;
       const updates: Record<string, unknown> = {};
 
-      if (req.body.current_page !== undefined) updates.currentPage = req.body.current_page;
-      if (req.body.furthest_page !== undefined) updates.furthestPage = req.body.furthest_page;
-      if (req.body.last_page_read !== undefined) updates.lastPageRead = req.body.last_page_read;
-      if (req.body.scale !== undefined) updates.scale = String(req.body.scale);
+      if (data.current_page !== undefined) updates.currentPage = data.current_page;
+      if (data.furthest_page !== undefined) updates.furthestPage = data.furthest_page;
+      if (data.last_page_read !== undefined) updates.lastPageRead = data.last_page_read;
+      if (data.scale !== undefined) updates.scale = String(data.scale);
 
       await db
         .update(readingProgress)

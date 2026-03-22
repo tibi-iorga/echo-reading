@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { userSettings } from "../_lib/schema.js";
+import { parseBody, SettingsSchema } from "../_lib/validate.js";
 import { eq } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -30,7 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "PUT") {
-      const settings = req.body;
+      const settings = parseBody(SettingsSchema, req.body, res);
+      if (!settings) return;
 
       const insertValues = {
         clerkUserId: userId,

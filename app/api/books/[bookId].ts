@@ -3,6 +3,7 @@ import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { books } from "../_lib/schema.js";
 import { toSnake } from "../_lib/casing.js";
+import { parseBookId, parseBody, UpdateBookSchema } from "../_lib/validate.js";
 import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { eq, and } from "drizzle-orm";
@@ -10,7 +11,8 @@ import { eq, and } from "drizzle-orm";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const userId = await authenticate(req.headers.authorization);
-    const bookId = req.query.bookId as string;
+    const bookId = parseBookId(req, res);
+    if (!bookId) return;
 
     if (req.method === "GET") {
       const result = await db
@@ -24,7 +26,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "PATCH") {
-      const { title, author, num_pages, storage_path, cover_path } = req.body;
+      const data = parseBody(UpdateBookSchema, req.body, res);
+      if (!data) return;
+      const { title, author, num_pages, storage_path, cover_path } = data;
       const updates: Record<string, unknown> = { updatedAt: new Date() };
 
       if (title !== undefined) updates.title = title;

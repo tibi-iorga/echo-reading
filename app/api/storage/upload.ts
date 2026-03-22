@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
+import { parseBody, UploadSchema } from "../_lib/validate.js";
 import { r2, R2_BUCKET } from "../_lib/r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -12,7 +13,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const { path, contentType } = req.body;
+    const data = parseBody(UploadSchema, req.body, res);
+    if (!data) return;
+    const { path, contentType } = data;
 
     // Ensure the storage path starts with the user's ID (security)
     if (!path.startsWith(`${userId}/`)) {

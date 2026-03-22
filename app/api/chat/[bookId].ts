@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticate, AuthError } from "../_lib/auth.js";
 import { db } from "../_lib/db.js";
 import { chatMessages } from "../_lib/schema.js";
+import { parseBookId, parseBody, ChatMessagesSchema } from "../_lib/validate.js";
 import { eq, and, asc } from "drizzle-orm";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const userId = await authenticate(req.headers.authorization);
-    const bookId = req.query.bookId as string;
+    const bookId = parseBookId(req, res);
+    if (!bookId) return;
 
     if (req.method === "GET") {
       const rows = await db
@@ -28,7 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // PUT — full replace all messages
     if (req.method === "PUT") {
-      const { messages } = req.body;
+      const data = parseBody(ChatMessagesSchema, req.body, res);
+      if (!data) return;
+      const { messages } = data;
 
       await db
         .delete(chatMessages)
@@ -52,7 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST — append messages (incremental)
     if (req.method === "POST") {
-      const { messages } = req.body;
+      const data = parseBody(ChatMessagesSchema, req.body, res);
+      if (!data) return;
+      const { messages } = data;
 
       if (messages && messages.length > 0) {
         const rows = messages.map((m: { id: string; role: string; content: string; quotedText?: string | null }) => ({

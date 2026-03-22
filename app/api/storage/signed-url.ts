@@ -16,6 +16,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const path = req.query.path as string;
+    if (!path || path.length > 1000) {
+      return res.status(400).json({ error: "Invalid or missing path parameter" });
+    }
 
     // Verify the user owns a book with this storage_path or cover_path
     const owned = await db
