@@ -16,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Ensure the path belongs to this user
     if (!path.startsWith(`${userId}/`)) {
-      return res.status(403).json({ error: "Access denied" });
+      console.error("Path ownership check failed:", { userId, pathPrefix: path.split("/")[0] });
+      return res.status(403).json({ error: "Access denied", debug: { userId, pathPrefix: path.split("/")[0] } });
     }
 
     const command = new GetObjectCommand({
