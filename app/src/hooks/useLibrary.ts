@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 import type { BookRow, BookWithProgress } from '@/services/api/types'
 
 export function useLibrary() {
@@ -15,13 +15,13 @@ export function useLibrary() {
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const data = await supabaseService.listBooks(userId)
+      const data = await api.listBooks(userId)
       setBooks(data)
 
       // Batch-fetch all cover URLs in a single request
       const paths = data.map((b) => b.cover_path).filter((p): p is string => !!p)
       if (paths.length > 0) {
-        const urls = await supabaseService.getSignedCoverUrls(paths)
+        const urls = await api.getSignedCoverUrls(paths)
         setCoverUrls(urls)
       }
     } catch (err) {
@@ -46,7 +46,7 @@ export function useLibrary() {
 
   const removeBook = useCallback(async (bookId: string, storagePath: string) => {
     try {
-      await supabaseService.deleteBook(bookId, storagePath)
+      await api.deleteBook(bookId, storagePath)
       setBooks((prev) => prev.filter((b) => b.id !== bookId))
     } catch (err) {
       console.error('Failed to delete book:', err)

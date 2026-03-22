@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 
 export function useCanvas(pdfId: string | null, userId?: string | null) {
   const [canvasContent, setCanvasContent] = useState<string>('')
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Load canvas content from Supabase
+  // Load canvas content from the API
   useEffect(() => {
     if (pdfId) {
-      supabaseService.getCanvasContent(pdfId)
+      api.getCanvasContent(pdfId)
         .then(setCanvasContent)
         .catch((err) => {
           console.warn('Failed to load canvas content:', err)
@@ -37,7 +37,7 @@ export function useCanvas(pdfId: string | null, userId?: string | null) {
 
     if (pdfId && userId) {
       saveTimeoutRef.current = setTimeout(() => {
-        supabaseService.saveCanvasContent(pdfId, userId, content).catch(console.error)
+        api.saveCanvasContent(pdfId, userId, content).catch(console.error)
       }, 500)
     }
   }, [pdfId, userId])

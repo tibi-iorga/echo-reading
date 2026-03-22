@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Annotation, TextSelection } from '@/types'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 
 export function useAnnotations(pdfId: string | null, userId?: string | null) {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
 
-  // Load annotations from Supabase
+  // Load annotations from the API
   useEffect(() => {
     if (pdfId) {
-      supabaseService.getAnnotations(pdfId)
+      api.getAnnotations(pdfId)
         .then(setAnnotations)
         .catch((err) => {
           console.warn('Failed to load annotations:', err)
@@ -30,7 +30,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
       createdAt: new Date(),
     }
     setAnnotations((prev) => [...prev, highlight])
-    supabaseService.upsertAnnotation(pdfId, userId, highlight).catch(console.error)
+    api.upsertAnnotation(pdfId, userId, highlight).catch(console.error)
   }, [pdfId, userId])
 
   const updateHighlightNote = useCallback((id: string, note: string) => {
@@ -39,7 +39,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
       const target = prev.find((a) => a.id === id && a.type === 'highlight')
       if (!target) return prev
       const updated = { ...target, note } as Annotation
-      supabaseService.upsertAnnotation(pdfId, userId, updated).catch(console.error)
+      api.upsertAnnotation(pdfId, userId, updated).catch(console.error)
       return prev.map((a) => (a.id === id ? updated : a))
     })
   }, [pdfId, userId])
@@ -54,7 +54,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
       createdAt: new Date(),
     }
     setAnnotations((prev) => [...prev, note])
-    supabaseService.upsertAnnotation(pdfId, userId, note).catch(console.error)
+    api.upsertAnnotation(pdfId, userId, note).catch(console.error)
   }, [pdfId, userId])
 
   const updateNote = useCallback((id: string, content: string, pageNumber?: number) => {
@@ -63,7 +63,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
       const target = prev.find((a) => a.id === id && a.type === 'note')
       if (!target) return prev
       const updated = { ...target, content, ...(pageNumber !== undefined ? { pageNumber } : {}) } as Annotation
-      supabaseService.upsertAnnotation(pdfId, userId, updated).catch(console.error)
+      api.upsertAnnotation(pdfId, userId, updated).catch(console.error)
       return prev.map((a) => (a.id === id ? updated : a))
     })
   }, [pdfId, userId])
@@ -71,7 +71,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
   const removeAnnotation = useCallback((id: string) => {
     if (!pdfId || !userId) return
     setAnnotations((prev) => prev.filter((a) => a.id !== id))
-    supabaseService.deleteAnnotation(id).catch(console.error)
+    api.deleteAnnotation(id).catch(console.error)
   }, [pdfId, userId])
 
   const addBookmark = useCallback((pageNumber: number, pageText?: string) => {
@@ -81,7 +81,7 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
     )
     if (existingBookmark) {
       setAnnotations((prev) => prev.filter((a) => a.id !== existingBookmark.id))
-      supabaseService.deleteAnnotation(existingBookmark.id).catch(console.error)
+      api.deleteAnnotation(existingBookmark.id).catch(console.error)
     } else {
       const bookmark: Annotation = {
         id: `bookmark_${Date.now()}`,
@@ -91,14 +91,14 @@ export function useAnnotations(pdfId: string | null, userId?: string | null) {
         createdAt: new Date(),
       }
       setAnnotations((prev) => [...prev, bookmark])
-      supabaseService.upsertAnnotation(pdfId, userId, bookmark).catch(console.error)
+      api.upsertAnnotation(pdfId, userId, bookmark).catch(console.error)
     }
   }, [pdfId, userId, annotations])
 
   const clearAllAnnotations = useCallback(() => {
     if (!pdfId || !userId) return
     setAnnotations([])
-    supabaseService.saveAnnotations(pdfId, userId, []).catch(console.error)
+    api.saveAnnotations(pdfId, userId, []).catch(console.error)
   }, [pdfId, userId])
 
   return {

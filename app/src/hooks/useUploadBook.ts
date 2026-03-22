@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 import type { BookRow } from '@/services/api/types'
 import { parseFilename } from '@/utils/filenameParser'
 import { extractPdfCover } from '@/utils/pdfCoverExtractor'
@@ -33,7 +33,7 @@ export function useUploadBook(onComplete?: (book: BookRow) => void, onBackground
 
       // Create book record with cover_path set upfront + upload PDF in parallel
       const [book] = await Promise.all([
-        supabaseService.createBookWithId(bookId, {
+        api.createBookWithId(bookId, {
           clerk_user_id: userId,
           title,
           author,
@@ -43,7 +43,7 @@ export function useUploadBook(onComplete?: (book: BookRow) => void, onBackground
           cover_path: coverPath,
           num_pages: null,
         }),
-        supabaseService.uploadPDFToPath(storagePath, file),
+        api.uploadPDFToPath(storagePath, file),
       ])
 
       // Book is ready to show — unblock the UI immediately
@@ -54,14 +54,14 @@ export function useUploadBook(onComplete?: (book: BookRow) => void, onBackground
       // Fire-and-forget: cover upload + reading progress init (not on critical path)
       coverPromise.then((coverBlob) =>
         Promise.all([
-          supabaseService.saveReadingProgress(book.id, userId, {
+          api.saveReadingProgress(book.id, userId, {
             current_page: 1,
             furthest_page: 1,
             last_page_read: 1,
             scale: 1.5,
           }),
           coverBlob
-            ? supabaseService.uploadCover(coverPath, coverBlob).catch(() => {})
+            ? api.uploadCover(coverPath, coverBlob).catch(() => {})
             : Promise.resolve(),
         ])
       ).then(() => onBackgroundDone?.()).catch(console.error)

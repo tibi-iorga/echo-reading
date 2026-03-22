@@ -7,7 +7,7 @@ import { BookCard } from './BookCard'
 import { UploadModal } from './UploadModal'
 import { EditBookModal } from './EditBookModal'
 import { ConfirmModal } from '@/components/ConfirmModal/ConfirmModal'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 import type { BookRow } from '@/services/api/types'
 
 export function LibraryView() {
@@ -67,7 +67,7 @@ export function LibraryView() {
   const handleEditSave = useCallback(async (metadata: { title: string; author: string | null }) => {
     if (!editTarget) return
     try {
-      await supabaseService.updateBook(editTarget.id, metadata)
+      await api.updateBook(editTarget.id, metadata)
       silentRefresh()
     } catch {
       // Error logged in service

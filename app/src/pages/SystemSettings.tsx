@@ -106,7 +106,7 @@ export function SystemSettings() {
     loadSettings()
   }, [])
 
-  // Hydrate from system settings when they load from Supabase
+  // Hydrate from system settings when they load from the API
   useEffect(() => {
     if (!settings || loading) return
 

@@ -13,7 +13,7 @@ import { exportToMarkdown, downloadMarkdown, exportToText, downloadText, exportT
 import { storageService } from '@/services/storage/storageService'
 import { extractPageText } from '@/utils/pdfTextExtractor'
 import { AlertModal } from '@/components/AlertModal/AlertModal'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 import type { BookRow } from '@/services/api/types'
 
 interface AppProps {
@@ -42,7 +42,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
     setNumPages(n)
     // Persist to Supabase if not already stored
     if (n > 0 && !book.num_pages) {
-      supabaseService.updateBook(bookId, { num_pages: n }).catch(() => {})
+      api.updateBook(bookId, { num_pages: n }).catch(() => {})
     }
   }, [bookId, book.num_pages])
   const [documentMetadata, _setDocumentMetadata] = useState<{ title: string; author: string | null } | null>(
@@ -215,7 +215,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
     setChatMessages([])
     setQuotedText(null)
     if (pdfId && userId) {
-      supabaseService.saveChatMessages(pdfId, userId, []).catch(console.warn)
+      api.saveChatMessages(pdfId, userId, []).catch(console.warn)
     }
   }, [pdfId, userId])
 
@@ -258,15 +258,15 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   const previousFurthestPageRef = useRef<number | null>(null)
   const isManualForwardNavigationRef = useRef<boolean>(false)
 
-  // Load persisted data from Supabase when book loads
+  // Load persisted data from the API when book loads
   useEffect(() => {
     if (!pdfId || !userId) return
 
     const loadPersistedData = async () => {
       try {
         const [progress, savedMessages] = await Promise.all([
-          supabaseService.getReadingProgress(pdfId),
-          supabaseService.getChatMessages(pdfId),
+          api.getReadingProgress(pdfId),
+          api.getChatMessages(pdfId),
         ])
 
         if (progress) {
@@ -288,7 +288,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
           })))
         }
       } catch (error) {
-        console.warn('Failed to load persisted data from Supabase:', error)
+        console.warn('Failed to load persisted data from the API:', error)
       }
     }
 
@@ -313,7 +313,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
 
   const handleNewChatMessages = useCallback((newMessages: Array<{ id: string; role: 'user' | 'assistant'; content: string; quotedText?: string | null }>) => {
     if (!pdfId || !userId) return
-    supabaseService.insertChatMessages(pdfId, userId, newMessages).catch(
+    api.insertChatMessages(pdfId, userId, newMessages).catch(
       (err) => console.warn('Failed to insert chat messages:', err)
     )
   }, [pdfId, userId])
@@ -362,7 +362,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
         setLastPageRead(newLastPageRead)
       }
 
-      supabaseService.updateReadingProgress(pdfId, {
+      api.updateReadingProgress(pdfId, {
         current_page: currentPage,
         scale,
         furthest_page: newFurthestPage ?? currentPage,

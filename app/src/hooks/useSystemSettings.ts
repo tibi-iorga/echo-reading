@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
 import { storageService } from '@/services/storage/storageService'
 import { llmService } from '@/services/llm/llmService'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 
 interface SystemSettings {
   theme: 'light' | 'dark'
@@ -12,9 +12,9 @@ interface SystemSettings {
 }
 
 /**
- * Hook that manages system-level settings with Supabase cross-device sync.
+ * Hook that manages system-level settings with Cross-device sync.
  *
- * On mount: fetches from Supabase and hydrates localStorage.
+ * On mount: fetches from the API and hydrates localStorage.
  * On save: writes to both localStorage (for immediate local reads) and Supabase (for cross-device sync).
  *
  * API key is NOT synced — it stays in encrypted IndexedDB per-device.
@@ -24,17 +24,17 @@ export function useSystemSettings() {
   const [loading, setLoading] = useState(true)
   const [settings, setSettings] = useState<SystemSettings | null>(null)
 
-  // Load settings: fetch from Supabase, fall back to localStorage
+  // Load settings: fetch from the API, fall back to localStorage
   useEffect(() => {
     if (!userId) return
 
     const load = async () => {
       setLoading(true)
       try {
-        const remote = await supabaseService.getUserSettings(userId)
+        const remote = await api.getUserSettings(userId)
 
         if (remote) {
-          // Hydrate localStorage from Supabase (remote wins)
+          // Hydrate localStorage from the API (remote wins)
           if (remote.theme === 'light' || remote.theme === 'dark') {
             storageService.saveTheme(remote.theme)
           }
@@ -109,14 +109,14 @@ export function useSystemSettings() {
     setSettings(prev => prev ? { ...prev, ...updates } : null)
 
     // Sync to Supabase (fire-and-forget with error logging)
-    const supabaseUpdates: Parameters<typeof supabaseService.saveUserSettings>[1] = {}
+    const supabaseUpdates: Parameters<typeof api.saveUserSettings>[1] = {}
     if (updates.theme) supabaseUpdates.theme = updates.theme
     if (updates.llmProvider) supabaseUpdates.llm_provider = updates.llmProvider
     if (updates.llmModel !== undefined) supabaseUpdates.llm_model = updates.llmModel
     if (updates.chatInstructions !== undefined) supabaseUpdates.chat_instructions = updates.chatInstructions
 
     try {
-      await supabaseService.saveUserSettings(userId, supabaseUpdates)
+      await api.saveUserSettings(userId, supabaseUpdates)
     } catch (err) {
       console.warn('Failed to sync settings to Supabase:', err)
     }

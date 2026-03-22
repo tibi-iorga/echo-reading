@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import * as supabaseService from '@/services/api/apiService'
+import * as api from '@/services/api/apiService'
 import type { BookRow } from '@/services/api/types'
 import App from '@/App'
 
@@ -49,7 +49,7 @@ export function ReadingView() {
 
     try {
       // Fetch book metadata (always fresh — lightweight row fetch)
-      const bookData = await supabaseService.getBook(bookId)
+      const bookData = await api.getBook(bookId)
       if (!bookData) {
         setError('Book not found')
         setLoading(false)
@@ -64,7 +64,7 @@ export function ReadingView() {
         return
       }
 
-      const signedUrl = await supabaseService.getSignedPdfUrl(bookData.storage_path)
+      const signedUrl = await api.getSignedPdfUrl(bookData.storage_path)
       cacheSignedUrl(bookId, signedUrl)
       setPdfUrl(signedUrl)
     } catch (err) {
