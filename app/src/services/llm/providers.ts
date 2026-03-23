@@ -141,9 +141,9 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
-// Stable aliases — Anthropic resolves these server-side, so they never go stale
-const ANTHROPIC_FALLBACK_MODELS = ['claude-sonnet-4-5-latest', 'claude-haiku-4-5-latest']
-const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-5-latest'
+// Stable aliases (model name without date) — Anthropic resolves to the latest snapshot
+const ANTHROPIC_FALLBACK_MODELS = ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-sonnet-4-5']
+const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-6'
 
 export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
