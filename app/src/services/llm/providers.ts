@@ -6,19 +6,16 @@ export interface TestConnectionResult {
   message: string
 }
 
+// Stable aliases that never go stale — the API resolves them to the latest dated version
+const OPENAI_FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
+const OPENAI_CHAT_MODEL_PREFIXES = ['gpt-', 'o1-', 'o3-', 'o4-', 'chatgpt-']
+
 export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
   private cachedModels: string[] | null = null
 
   getAvailableModels(): string[] {
-    // Return cached models or fallback list
-    return this.cachedModels || [
-      'gpt-4o',
-      'gpt-4o-mini',
-      'gpt-4-turbo',
-      'gpt-4',
-      'gpt-3.5-turbo',
-    ]
+    return this.cachedModels || OPENAI_FALLBACK_MODELS
   }
 
   getDefaultModel(): string {
@@ -41,22 +38,18 @@ export class OpenAIProvider implements LLMProvider {
 
       const data = await response.json()
       const models = data.data
-        .filter((model: { id: string }) => model.id.includes('gpt'))
-        .map((model: { id: string }) => model.id)
+        .filter((m: { id: string }) => OPENAI_CHAT_MODEL_PREFIXES.some(p => m.id.startsWith(p)))
+        .map((m: { id: string }) => m.id)
         .sort()
-      
-      this.cachedModels = models
-      return models
+
+      this.cachedModels = models.length > 0 ? models : null
+      return models.length > 0 ? models : this.getAvailableModels()
     } catch (error) {
       console.warn('Failed to fetch OpenAI models, using fallback list:', error)
       return this.getAvailableModels()
     }
   }
 
-  /**
-   * Test the API connection by calling the models endpoint
-   * This is free and confirms the key is valid
-   */
   async testConnection(apiKey: string): Promise<TestConnectionResult> {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {
@@ -89,16 +82,14 @@ export class OpenAIProvider implements LLMProvider {
 
   async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
-    
-    // Add system instructions if provided
+
     if (systemInstructions) {
       messages.push({
         role: 'system',
         content: systemInstructions,
       })
     }
-    
-    // Add conversation history (excluding system messages, as we handle that separately)
+
     if (conversationHistory) {
       for (const msg of conversationHistory) {
         if (msg.role !== 'system') {
@@ -109,8 +100,7 @@ export class OpenAIProvider implements LLMProvider {
         }
       }
     }
-    
-    // Add current user message
+
     messages.push({
       role: 'user',
       content: message,
@@ -133,7 +123,6 @@ export class OpenAIProvider implements LLMProvider {
       let errorMessage = 'Failed to send message to OpenAI'
       try {
         const error = await response.json()
-        // OpenAI error format: { error: { message: string, type: string, ... } }
         if (error?.error?.message) {
           errorMessage = error.error.message
         } else if (typeof error === 'string') {
@@ -142,7 +131,6 @@ export class OpenAIProvider implements LLMProvider {
           errorMessage = error.message
         }
       } catch {
-        // If JSON parsing fails, use status text or default message
         errorMessage = response.statusText || errorMessage
       }
       throw new Error(sanitizeErrorMessage(errorMessage))
@@ -153,97 +141,62 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
+// Stable aliases — Anthropic resolves these server-side, so they never go stale
+const ANTHROPIC_FALLBACK_MODELS = ['claude-sonnet-4-5-latest', 'claude-haiku-4-5-latest']
+const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-5-latest'
+
 export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
   private cachedModels: string[] | null = null
 
+  private anthropicHeaders(apiKey: string): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    }
+  }
+
   getAvailableModels(): string[] {
-    // Return cached models or fallback list
-    return this.cachedModels || [
-      'claude-sonnet-4-5-20250514',
-      'claude-haiku-4-5-20251001',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-    ]
+    return this.cachedModels || ANTHROPIC_FALLBACK_MODELS
   }
 
   getDefaultModel(): string {
-    const models = this.getAvailableModels()
-    // Prefer newest Sonnet, then Haiku
-    const preferredOrder = ['claude-sonnet-4', 'claude-3-5-sonnet', 'claude-haiku-4', 'claude-3-5-haiku']
-    for (const preferred of preferredOrder) {
-      const found = models.find(model => model.includes(preferred))
-      if (found) return found
-    }
-    return models[0]
+    return ANTHROPIC_DEFAULT_MODEL
   }
 
   async fetchAvailableModels(apiKey: string): Promise<string[]> {
-    // Anthropic doesn't have a models endpoint, so we test common models
-    const commonModels = [
-      'claude-sonnet-4-5-20250514',
-      'claude-haiku-4-5-20251001',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-    ]
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+        method: 'GET',
+        headers: this.anthropicHeaders(apiKey),
+      })
 
-    const availableModels: string[] = []
-
-    for (const model of commonModels) {
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 1,
-            messages: [{ role: 'user', content: 'Hi' }],
-          }),
-        })
-
-        if (response.ok || response.status === 400) {
-          // 400 might be due to low max_tokens, but model exists
-          availableModels.push(model)
-        }
-      } catch (error) {
-        // Skip models that fail
-        continue
+      if (!response.ok) {
+        throw new Error('Failed to fetch models')
       }
-    }
 
-    if (availableModels.length > 0) {
-      this.cachedModels = availableModels
-      return availableModels
-    }
+      const data = await response.json()
+      const models = (data.data as Array<{ id: string; type: string }>)
+        .map(m => m.id)
+        .filter(id => id.startsWith('claude-'))
+        .sort()
 
-    console.warn('Failed to detect Anthropic models, using fallback list')
-    return this.getAvailableModels()
+      this.cachedModels = models.length > 0 ? models : null
+      return models.length > 0 ? models : this.getAvailableModels()
+    } catch (error) {
+      console.warn('Failed to fetch Anthropic models, using fallback list:', error)
+      return this.getAvailableModels()
+    }
   }
 
-  /**
-   * Test the API connection
-   * Anthropic does not have a simple models endpoint, so we use a minimal message
-   */
   async testConnection(apiKey: string): Promise<TestConnectionResult> {
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1,
-          messages: [{ role: 'user', content: 'Hi' }],
-        }),
+      // Use the models endpoint — free, no tokens consumed
+      const response = await fetch('https://api.anthropic.com/v1/models?limit=1', {
+        method: 'GET',
+        headers: this.anthropicHeaders(apiKey),
       })
 
       if (!response.ok) {
@@ -269,8 +222,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: LLMMessage[]): Promise<string> {
     const messages: Array<{ role: string; content: string }> = []
-    
-    // Add conversation history (excluding system messages, as we handle that separately)
+
     if (conversationHistory) {
       for (const msg of conversationHistory) {
         if (msg.role !== 'system') {
@@ -281,8 +233,7 @@ export class AnthropicProvider implements LLMProvider {
         }
       }
     }
-    
-    // Add current user message
+
     messages.push({
       role: 'user',
       content: message,
@@ -294,19 +245,13 @@ export class AnthropicProvider implements LLMProvider {
       messages,
     }
 
-    // Anthropic uses a separate 'system' field for system instructions
     if (systemInstructions) {
       body.system = systemInstructions
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: this.anthropicHeaders(apiKey),
       body: JSON.stringify(body),
     })
 

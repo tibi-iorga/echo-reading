@@ -10,18 +10,19 @@ Echo is a Vite + React SPA — an AI reading companion for PDFs. Users open PDFs
 
 The app source lives in `app/`. All npm commands must be run from the `app/` directory.
 
-- `app/src/App.tsx` — Main component (~1000 lines), manages top-level state and orchestrates the split-view layout (PDF left, notes panel right)
-- `app/src/components/` — React components organized by feature (PDFViewer/, NotesPanel/, FileSelector/, modals)
-- `app/src/hooks/` — Custom hooks: `usePDF`, `useAnnotations`, `useCanvas`, `useKeyboardShortcuts`
+- `app/src/App.tsx` — Main component (~670 lines), manages top-level state and orchestrates the split-view layout (PDF left, notes panel right)
+- `app/src/components/` — React components organized by feature (PDFViewer/, NotesPanel/, FileSelector/, Library/, SelectionActions/, auth/, landing/, layout/, reading/, modals)
+- `app/src/hooks/` — Custom hooks: `usePDF`, `useAnnotations`, `useCanvas`, `useKeyboardShortcuts`, `useLibrary`, `useUploadBook`, `useSystemSettings`
+- `app/src/pages/` — Route-level pages: `SystemSettings.tsx`, `PrivacyPolicy.tsx`
 - `app/src/services/` — Business logic layer:
   - `api/` — API service (`apiService.ts`) and types — all CRUD operations via Vercel serverless functions
-  - `llm/` — Multi-provider LLM abstraction (`llmService.ts`, `providers.ts`)
+  - `llm/` — Multi-provider LLM abstraction (`llmService.ts`, `providers.ts`, `errorSanitizer.ts`)
   - `storage/` — localStorage persistence + encrypted IndexedDB for API keys (`secureKeyStorage.ts`)
-  - `fileSync/` — Cross-browser sync via File System Access API
   - `dictionary/` — Dictionary lookup service
-- `app/api/` — Vercel serverless API routes (books, annotations, canvas, chat, progress, settings, storage)
-  - `_lib/` — Shared utilities (auth, db, r2, schema, casing)
+- `app/api/` — Vercel serverless API routes (books, annotations, canvas, chat, progress, settings, storage, health)
+  - `_lib/` — Shared utilities (auth, db, r2, schema, casing, validate)
 - `app/src/types/index.ts` — All shared TypeScript types
+- `app/src/constants/version.ts` — App version constant
 - `app/src/utils/` — Export (MD/PDF/TXT), PDF text extraction, filename parsing, markdown rendering
 - `app/src/contexts/ThemeContext.tsx` — Dark/light mode via CSS class
 - `product-context/` — Project requirements and documentation (not committed to git)
@@ -39,6 +40,7 @@ npm run test             # Unit tests in watch mode
 npm run test:coverage    # Unit tests with coverage report
 npm run test:e2e         # Full Playwright E2E suite
 npx playwright test tests/e2e/deployment-critical.spec.ts  # Stable E2E subset (preferred pre-deploy)
+npm run version:patch    # Bump patch version (also minor, major)
 ```
 
 Run a single test file: `npx vitest run src/utils/filenameParser.test.ts`
@@ -49,9 +51,9 @@ Run a single E2E test: `npx playwright test tests/e2e/deployment-critical.spec.t
 
 **State management**: No Redux/Zustand — state lives in custom hooks (`usePDF`, `useAnnotations`, `useCanvas`) called from `App.tsx` and passed down via props. ThemeContext is the only React Context.
 
-**LLM abstraction**: `services/llm/providers.ts` defines provider implementations; `llmService.ts` exposes a unified interface. Adding a new LLM provider means adding a provider class and registering it.
+**LLM abstraction**: `services/llm/providers.ts` defines provider implementations (OpenAI, Anthropic); `llmService.ts` exposes a unified interface. `errorSanitizer.ts` strips API keys from error messages. Adding a new LLM provider means adding a provider class and registering it. API calls are made directly from the browser (client-side keys stored in encrypted IndexedDB).
 
-**Backend**: Vercel serverless functions (`app/api/`) with Clerk JWT auth, Neon Postgres via Drizzle ORM, and Cloudflare R2 for PDF/cover storage (presigned URLs for direct browser upload/download).
+**Backend**: Vercel serverless functions (`app/api/`) with Clerk JWT auth, Neon Postgres via Drizzle ORM, and Cloudflare R2 for PDF/cover storage (presigned URLs for direct browser upload/download). All API route inputs are validated with Zod schemas (`app/api/_lib/validate.ts`) — bookId params are UUID-checked, request bodies are parsed via `parseBody()`.
 
 **Storage tiers**: (1) Neon Postgres for all structured data (books, annotations, progress, settings); (2) Cloudflare R2 for file storage (PDFs, covers); (3) IndexedDB with encryption for LLM API keys (`secureKeyStorage.ts`); (4) localStorage as a fast cache.
 
@@ -69,7 +71,7 @@ Run a single E2E test: `npx playwright test tests/e2e/deployment-critical.spec.t
 
 ## Deployment
 
-Pushes to `master` auto-deploy to Vercel. Always run build, lint, and tests before pushing. The `vercel.json` configures SPA routing (non-API routes rewrite to `index.html`) and asset caching. API routes are served as Vercel serverless functions from `app/api/`.
+Pushes to `master` auto-deploy to Vercel. Always run build, lint, and tests before pushing. The `app/vercel.json` configures SPA routing (non-API routes rewrite to `index.html`) and asset caching. API routes are served as Vercel serverless functions from `app/api/`.
 
 **Environment variables** (Vercel Production): `DATABASE_URL`, `CLERK_SECRET_KEY`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `VITE_CLERK_PUBLISHABLE_KEY`.
 
