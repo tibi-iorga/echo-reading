@@ -160,16 +160,17 @@ export class AnthropicProvider implements LLMProvider {
   getAvailableModels(): string[] {
     // Return cached models or fallback list
     return this.cachedModels || [
+      'claude-sonnet-4-5-20250514',
+      'claude-haiku-4-5-20251001',
       'claude-3-5-sonnet-20241022',
       'claude-3-5-haiku-20241022',
-      'claude-3-haiku-20240307',
     ]
   }
 
   getDefaultModel(): string {
     const models = this.getAvailableModels()
-    // Prefer Sonnet models, then Haiku
-    const preferredOrder = ['claude-3-5-sonnet', 'claude-3-sonnet', 'claude-3-5-haiku', 'claude-3-haiku']
+    // Prefer newest Sonnet, then Haiku
+    const preferredOrder = ['claude-sonnet-4', 'claude-3-5-sonnet', 'claude-haiku-4', 'claude-3-5-haiku']
     for (const preferred of preferredOrder) {
       const found = models.find(model => model.includes(preferred))
       if (found) return found
@@ -180,11 +181,10 @@ export class AnthropicProvider implements LLMProvider {
   async fetchAvailableModels(apiKey: string): Promise<string[]> {
     // Anthropic doesn't have a models endpoint, so we test common models
     const commonModels = [
+      'claude-sonnet-4-5-20250514',
+      'claude-haiku-4-5-20251001',
       'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022', 
-      'claude-3-haiku-20240307',
-      'claude-3-sonnet-20240229',
-      'claude-3-opus-20240229',
+      'claude-3-5-haiku-20241022',
     ]
 
     const availableModels: string[] = []
@@ -240,7 +240,7 @@ export class AnthropicProvider implements LLMProvider {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 1,
           messages: [{ role: 'user', content: 'Hi' }],
         }),
