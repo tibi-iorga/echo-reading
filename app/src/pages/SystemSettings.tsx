@@ -61,10 +61,9 @@ export function SystemSettings() {
       const storedKey = await storageService.getApiKey()
       setIsInFallbackMode(storageService.isApiKeyInFallbackMode())
 
-      const storedProvider = storageService.getProvider() || 'OpenAI'
+      const storedProvider = llmService.resolveProviderId(storageService.getProvider())
       setSelectedProvider(storedProvider)
       setSavedProvider(storedProvider)
-      llmService.setProvider(storedProvider)
 
       if (storedKey) {
         setApiKey(storedKey)
@@ -72,9 +71,14 @@ export function SystemSettings() {
 
         setConnectionStatus('testing')
         try {
-          const result = await llmService.testConnection(storedKey)
+          const result = await llmService.testConnection(storedProvider, storedKey)
           if (result.success) {
             setConnectionStatus('connected')
+            // Refresh the live model list in the background so the dropdown
+            // reflects what the key actually has access to (and Chat won't
+            // silently downgrade a stored model that's missing from the
+            // fallback list).
+            void llmService.fetchAvailableModels(storedProvider, storedKey)
           } else {
             setConnectionStatus('failed')
             setConnectionError(result.message)
@@ -85,11 +89,10 @@ export function SystemSettings() {
         }
       }
 
-      const currentProvider = llmService.getCurrentProvider()
-      const defaultModel = currentProvider?.getDefaultModel() || 'gpt-4o'
       const storedModel = storageService.getModel()
-      const availableModels = currentProvider?.getAvailableModels() || []
-      const modelToUse = (storedModel && availableModels.includes(storedModel)) ? storedModel : defaultModel
+      const modelToUse = (storedModel && llmService.isModelAvailable(storedProvider, storedModel))
+        ? storedModel
+        : llmService.getDefaultModel(storedProvider)
       setSelectedModel(modelToUse)
       setSavedModel(modelToUse)
 
@@ -110,11 +113,10 @@ export function SystemSettings() {
   useEffect(() => {
     if (!settings || loading) return
 
-    const storedProvider = storageService.getProvider() || 'OpenAI'
+    const storedProvider = llmService.resolveProviderId(storageService.getProvider())
     if (storedProvider !== selectedProvider) {
       setSelectedProvider(storedProvider)
       setSavedProvider(storedProvider)
-      llmService.setProvider(storedProvider)
     }
 
     const storedModel = storageService.getModel() || ''
@@ -158,31 +160,26 @@ export function SystemSettings() {
       storageService.setProvider(selectedProvider)
       setSavedModel(selectedModel)
       setSavedProvider(selectedProvider)
-      llmService.setProvider(selectedProvider)
 
       saveSettings({ llmProvider: selectedProvider, llmModel: selectedModel })
 
       setConnectionStatus('testing')
       try {
-        const result = await llmService.testConnection(apiKey.trim())
+        const result = await llmService.testConnection(selectedProvider, apiKey.trim())
         if (result.success) {
           setConnectionStatus('connected')
 
-          const currentProvider = llmService.getCurrentProvider()
-          if (currentProvider?.fetchAvailableModels) {
-            try {
-              await currentProvider.fetchAvailableModels(apiKey.trim())
-              const availableModels = currentProvider.getAvailableModels()
-              if (!availableModels.includes(selectedModel)) {
-                const defaultModel = currentProvider.getDefaultModel()
-                setSelectedModel(defaultModel)
-                storageService.setModel(defaultModel)
-                setSavedModel(defaultModel)
-                saveSettings({ llmModel: defaultModel })
-              }
-            } catch {
-              console.warn('Failed to fetch models, using fallback list')
+          try {
+            const availableModels = await llmService.fetchAvailableModels(selectedProvider, apiKey.trim())
+            if (!availableModels.includes(selectedModel)) {
+              const defaultModel = llmService.getDefaultModel(selectedProvider)
+              setSelectedModel(defaultModel)
+              storageService.setModel(defaultModel)
+              setSavedModel(defaultModel)
+              saveSettings({ llmModel: defaultModel })
             }
+          } catch {
+            console.warn('Failed to fetch models, using fallback list')
           }
         } else {
           setConnectionStatus('failed')
@@ -201,7 +198,6 @@ export function SystemSettings() {
       storageService.setProvider(selectedProvider)
       setSavedModel(selectedModel)
       setSavedProvider(selectedProvider)
-      llmService.setProvider(selectedProvider)
 
       saveSettings({ llmProvider: selectedProvider, llmModel: selectedModel })
     }
@@ -334,15 +330,10 @@ export function SystemSettings() {
                     onChange={(e) => {
                       const newProvider = e.target.value
                       setSelectedProvider(newProvider)
-                      setSavedProvider(newProvider)
-                      llmService.setProvider(newProvider)
-                      storageService.setProvider(newProvider)
                       setApiKey('')
-                      const currentProvider = llmService.getCurrentProvider()
-                      const defaultModel = currentProvider?.getDefaultModel() || ''
-                      setSelectedModel(defaultModel)
-                      setSavedModel(defaultModel)
-                      storageService.setModel(defaultModel)
+                      // Show the new provider's default in the model dropdown,
+                      // but don't persist anything until the user clicks Save.
+                      setSelectedModel(llmService.getDefaultModel(newProvider))
                       setConnectionStatus('untested')
                       setConnectionError(null)
                     }}
@@ -427,7 +418,7 @@ export function SystemSettings() {
                     className={`w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${selectStyle}`}
                     style={selectBg}
                   >
-                    {llmService.getCurrentProvider()?.getAvailableModels().map((model) => (
+                    {llmService.getAvailableModels(selectedProvider).map((model) => (
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </select>

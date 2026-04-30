@@ -1,59 +1,153 @@
-import type { LLMProvider } from '@/types'
+import type { LLMProvider, LLMMessage } from '@/types'
 import { OpenAIProvider, AnthropicProvider, type TestConnectionResult } from './providers'
 
-// Extended provider interface with testConnection
 interface ExtendedLLMProvider extends LLMProvider {
   testConnection?(apiKey: string): Promise<TestConnectionResult>
 }
 
+const MODEL_CACHE_KEY = 'llm_models_cache_v1'
+const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h
+
+interface ModelCacheFile {
+  fetchedAt: number
+  byProvider: Record<string, string[]>
+}
+
 class LLMService {
   private providers: Map<string, ExtendedLLMProvider> = new Map()
-  private currentProvider: ExtendedLLMProvider | null = null
+  private modelCache: Map<string, string[]> = new Map()
 
   constructor() {
     this.registerProvider(new OpenAIProvider())
     this.registerProvider(new AnthropicProvider())
-    this.currentProvider = this.providers.get('OpenAI') || null
+    this.hydrateModelCache()
   }
 
   registerProvider(provider: ExtendedLLMProvider): void {
     this.providers.set(provider.name, provider)
   }
 
-  setProvider(name: string): void {
-    const provider = this.providers.get(name)
-    if (!provider) {
-      throw new Error(`Provider ${name} not found`)
-    }
-    this.currentProvider = provider
-  }
-
-  getCurrentProvider(): ExtendedLLMProvider | null {
-    return this.currentProvider
-  }
-
   getAvailableProviders(): string[] {
     return Array.from(this.providers.keys())
   }
 
-  /**
-   * Test the connection to the current provider
-   */
-  async testConnection(apiKey: string): Promise<TestConnectionResult> {
-    if (!this.currentProvider) {
-      return { success: false, message: 'No LLM provider selected' }
-    }
-    if (!this.currentProvider.testConnection) {
-      return { success: false, message: 'Provider does not support connection testing' }
-    }
-    return this.currentProvider.testConnection(apiKey)
+  hasProvider(name: string): boolean {
+    return this.providers.has(name)
   }
 
-  async sendMessage(message: string, apiKey: string, model: string, systemInstructions?: string, conversationHistory?: import('@/types').LLMMessage[]): Promise<string> {
-    if (!this.currentProvider) {
-      throw new Error('No LLM provider selected')
+  /**
+   * Resolve a stored provider name to a known provider, falling back to the
+   * first registered one if the name is unknown (e.g. stale settings row).
+   */
+  resolveProviderId(name: string | null | undefined): string {
+    if (name && this.providers.has(name)) return name
+    const fallback = this.getAvailableProviders()[0]
+    if (!fallback) throw new Error('No LLM providers registered')
+    return fallback
+  }
+
+  private getProvider(providerId: string): ExtendedLLMProvider {
+    const provider = this.providers.get(providerId)
+    if (!provider) {
+      throw new Error(`Unknown LLM provider: ${providerId}`)
     }
-    return this.currentProvider.sendMessage(message, apiKey, model, systemInstructions, conversationHistory)
+    return provider
+  }
+
+  /**
+   * Returns the cached live model list for a provider, or its static fallback
+   * list if no cache is available. Always safe to call from render.
+   */
+  getAvailableModels(providerId: string): string[] {
+    const cached = this.modelCache.get(providerId)
+    if (cached && cached.length > 0) return cached
+    return this.getProvider(providerId).getAvailableModels()
+  }
+
+  /**
+   * Returns the provider's preferred default model if it is in the available
+   * list, otherwise the first available model.
+   */
+  getDefaultModel(providerId: string): string {
+    const provider = this.getProvider(providerId)
+    const preferred = provider.getDefaultModel()
+    const available = this.getAvailableModels(providerId)
+    if (available.includes(preferred)) return preferred
+    return available[0] ?? preferred
+  }
+
+  /**
+   * Returns true if `model` is in the cached/fallback list for the provider.
+   */
+  isModelAvailable(providerId: string, model: string): boolean {
+    return this.getAvailableModels(providerId).includes(model)
+  }
+
+  async fetchAvailableModels(providerId: string, apiKey: string): Promise<string[]> {
+    const provider = this.getProvider(providerId)
+    if (!provider.fetchAvailableModels) {
+      return this.getAvailableModels(providerId)
+    }
+    try {
+      const models = await provider.fetchAvailableModels(apiKey)
+      if (models.length > 0) {
+        this.modelCache.set(providerId, models)
+        this.persistModelCache()
+        return models
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch models for ${providerId}, using fallback list:`, error)
+    }
+    return this.getAvailableModels(providerId)
+  }
+
+  async testConnection(providerId: string, apiKey: string): Promise<TestConnectionResult> {
+    const provider = this.getProvider(providerId)
+    if (!provider.testConnection) {
+      return { success: false, message: 'Provider does not support connection testing' }
+    }
+    return provider.testConnection(apiKey)
+  }
+
+  async sendMessage(
+    providerId: string,
+    apiKey: string,
+    model: string,
+    message: string,
+    systemInstructions?: string,
+    conversationHistory?: LLMMessage[],
+  ): Promise<string> {
+    return this.getProvider(providerId).sendMessage(message, apiKey, model, systemInstructions, conversationHistory)
+  }
+
+  private hydrateModelCache(): void {
+    try {
+      const raw = localStorage.getItem(MODEL_CACHE_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw) as ModelCacheFile
+      if (!data || typeof data.fetchedAt !== 'number') return
+      if (Date.now() - data.fetchedAt > MODEL_CACHE_TTL_MS) return
+      for (const [providerId, models] of Object.entries(data.byProvider ?? {})) {
+        if (this.providers.has(providerId) && Array.isArray(models)) {
+          this.modelCache.set(providerId, models)
+        }
+      }
+    } catch {
+      // Corrupt or unreadable cache; ignore and use fallback lists.
+    }
+  }
+
+  private persistModelCache(): void {
+    try {
+      const byProvider: Record<string, string[]> = {}
+      for (const [providerId, models] of this.modelCache.entries()) {
+        byProvider[providerId] = models
+      }
+      const data: ModelCacheFile = { fetchedAt: Date.now(), byProvider }
+      localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify(data))
+    } catch {
+      // localStorage full or unavailable; the in-memory cache still works.
+    }
   }
 }
 

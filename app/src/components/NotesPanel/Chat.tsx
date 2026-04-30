@@ -455,16 +455,17 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
         systemInstructions = systemInstructions + `\n\n${messageQuotedText}`
       }
 
-      // Get model from storage (must be valid for current provider, else use default)
-      const currentProvider = llmService.getCurrentProvider()
+      // Resolve provider + model from storage. Trust the stored model: the
+      // user picked it in Settings against a live model list, and the cached
+      // fallback list may not include it after a fresh reload.
+      const providerId = llmService.resolveProviderId(storageService.getProvider())
       const storedModel = storageService.getModel()
-      const availableModels = currentProvider?.getAvailableModels() || []
-      const model = (storedModel && availableModels.includes(storedModel))
+      const model = storedModel && storedModel.length > 0
         ? storedModel
-        : (currentProvider?.getDefaultModel() || 'gpt-4o')
+        : llmService.getDefaultModel(providerId)
 
       // Send to LLM with conversation history
-      const response = await llmService.sendMessage(messageToSend, apiKey, model, systemInstructions || undefined, conversationHistory)
+      const response = await llmService.sendMessage(providerId, apiKey, model, messageToSend, systemInstructions || undefined, conversationHistory)
 
       // Add assistant response
       const assistantMsg: Message = {

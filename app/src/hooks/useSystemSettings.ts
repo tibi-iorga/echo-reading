@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/react'
 import { storageService } from '@/services/storage/storageService'
-import { llmService } from '@/services/llm/llmService'
 import * as api from '@/services/api/apiService'
 
 interface SystemSettings {
@@ -40,7 +39,6 @@ export function useSystemSettings() {
           }
           if (remote.llmProvider) {
             storageService.setProvider(remote.llmProvider)
-            llmService.setProvider(remote.llmProvider)
           }
           if (remote.llmModel) {
             storageService.setModel(remote.llmModel)
@@ -58,7 +56,6 @@ export function useSystemSettings() {
         } else {
           // No remote settings — read from localStorage
           const storedProvider = storageService.getProvider() || 'OpenAI'
-          llmService.setProvider(storedProvider)
 
           setSettings({
             theme: storageService.getTheme() || 'light',
@@ -70,7 +67,6 @@ export function useSystemSettings() {
       } catch (err) {
         console.warn('Failed to load remote settings, using local:', err)
         const storedProvider = storageService.getProvider() || 'OpenAI'
-        llmService.setProvider(storedProvider)
 
         setSettings({
           theme: storageService.getTheme() || 'light',
@@ -96,7 +92,6 @@ export function useSystemSettings() {
     }
     if (updates.llmProvider) {
       storageService.setProvider(updates.llmProvider)
-      llmService.setProvider(updates.llmProvider)
     }
     if (updates.llmModel) {
       storageService.setModel(updates.llmModel)

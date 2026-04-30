@@ -12,42 +12,32 @@ const OPENAI_CHAT_MODEL_PREFIXES = ['gpt-', 'o1-', 'o3-', 'o4-', 'chatgpt-']
 
 export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
-  private cachedModels: string[] | null = null
 
   getAvailableModels(): string[] {
-    return this.cachedModels || OPENAI_FALLBACK_MODELS
+    return OPENAI_FALLBACK_MODELS
   }
 
   getDefaultModel(): string {
-    const models = this.getAvailableModels()
-    return models.includes('gpt-4o') ? 'gpt-4o' : models[0]
+    return 'gpt-4o'
   }
 
   async fetchAvailableModels(apiKey: string): Promise<string[]> {
-    try {
-      const response = await fetch('https://api.openai.com/v1/models', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
-      })
+    const response = await fetch('https://api.openai.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch models')
-      }
-
-      const data = await response.json()
-      const models = data.data
-        .filter((m: { id: string }) => OPENAI_CHAT_MODEL_PREFIXES.some(p => m.id.startsWith(p)))
-        .map((m: { id: string }) => m.id)
-        .sort()
-
-      this.cachedModels = models.length > 0 ? models : null
-      return models.length > 0 ? models : this.getAvailableModels()
-    } catch (error) {
-      console.warn('Failed to fetch OpenAI models, using fallback list:', error)
-      return this.getAvailableModels()
+    if (!response.ok) {
+      throw new Error('Failed to fetch models')
     }
+
+    const data = await response.json()
+    return (data.data as Array<{ id: string }>)
+      .filter(m => OPENAI_CHAT_MODEL_PREFIXES.some(p => m.id.startsWith(p)))
+      .map(m => m.id)
+      .sort()
   }
 
   async testConnection(apiKey: string): Promise<TestConnectionResult> {
@@ -147,7 +137,6 @@ const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-6'
 
 export class AnthropicProvider implements LLMProvider {
   name = 'Anthropic'
-  private cachedModels: string[] | null = null
 
   private anthropicHeaders(apiKey: string): Record<string, string> {
     return {
@@ -159,7 +148,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   getAvailableModels(): string[] {
-    return this.cachedModels || ANTHROPIC_FALLBACK_MODELS
+    return ANTHROPIC_FALLBACK_MODELS
   }
 
   getDefaultModel(): string {
@@ -167,28 +156,20 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async fetchAvailableModels(apiKey: string): Promise<string[]> {
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/models?limit=100', {
-        method: 'GET',
-        headers: this.anthropicHeaders(apiKey),
-      })
+    const response = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+      method: 'GET',
+      headers: this.anthropicHeaders(apiKey),
+    })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch models')
-      }
-
-      const data = await response.json()
-      const models = (data.data as Array<{ id: string; type: string }>)
-        .map(m => m.id)
-        .filter(id => id.startsWith('claude-'))
-        .sort()
-
-      this.cachedModels = models.length > 0 ? models : null
-      return models.length > 0 ? models : this.getAvailableModels()
-    } catch (error) {
-      console.warn('Failed to fetch Anthropic models, using fallback list:', error)
-      return this.getAvailableModels()
+    if (!response.ok) {
+      throw new Error('Failed to fetch models')
     }
+
+    const data = await response.json()
+    return (data.data as Array<{ id: string; type: string }>)
+      .map(m => m.id)
+      .filter(id => id.startsWith('claude-'))
+      .sort()
   }
 
   async testConnection(apiKey: string): Promise<TestConnectionResult> {
