@@ -6,6 +6,7 @@ import { AppRoutes } from './AppRoutes'
 import './index.css'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { storageService } from './services/storage/storageService'
+import { llmService } from './services/llm/llmService'
 
 // Global error handler
 window.addEventListener('error', () => {
@@ -27,6 +28,20 @@ async function initializeApp() {
     // API key will need to be re-entered
     console.warn('Failed to initialize secure storage:', error)
   }
+
+  // Refresh the live model list for the active provider in the background
+  // so Chat (and Settings) reflect what the API key actually has access to,
+  // not just the static fallback list. Fire-and-forget; never blocks render.
+  void (async () => {
+    try {
+      const apiKey = await storageService.getApiKey()
+      if (!apiKey) return
+      const providerId = llmService.resolveProviderId(storageService.getProvider())
+      await llmService.fetchAvailableModels(providerId, apiKey)
+    } catch {
+      // Network or provider error — fallback list stays in use.
+    }
+  })()
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

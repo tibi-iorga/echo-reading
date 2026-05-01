@@ -8,19 +8,41 @@ interface ExtendedLLMProvider extends LLMProvider {
 const MODEL_CACHE_KEY = 'llm_models_cache_v1'
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h
 
+// Stable empty reference so getAvailableModels can be called from useSyncExternalStore
+// snapshots without producing a new array on every render.
+const EMPTY_MODELS: string[] = []
+
 interface ModelCacheFile {
   fetchedAt: number
   byProvider: Record<string, string[]>
 }
 
+type ModelCacheListener = () => void
+
 class LLMService {
   private providers: Map<string, ExtendedLLMProvider> = new Map()
   private modelCache: Map<string, string[]> = new Map()
+  private listeners: Set<ModelCacheListener> = new Set()
 
   constructor() {
     this.registerProvider(new OpenAIProvider())
     this.registerProvider(new AnthropicProvider())
     this.hydrateModelCache()
+  }
+
+  /**
+   * Subscribe to model cache changes (for useSyncExternalStore).
+   * Returns an unsubscribe function.
+   */
+  subscribe = (listener: ModelCacheListener): (() => void) => {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener()
   }
 
   registerProvider(provider: ExtendedLLMProvider): void {
@@ -56,9 +78,11 @@ class LLMService {
 
   /**
    * Returns the cached live model list for a provider, or its static fallback
-   * list if no cache is available. Always safe to call from render.
+   * list if no cache is available. Always safe to call from render — returns
+   * a stable empty array for an empty or unknown provider id.
    */
   getAvailableModels(providerId: string): string[] {
+    if (!providerId || !this.providers.has(providerId)) return EMPTY_MODELS
     const cached = this.modelCache.get(providerId)
     if (cached && cached.length > 0) return cached
     return this.getProvider(providerId).getAvailableModels()
@@ -83,6 +107,18 @@ class LLMService {
     return this.getAvailableModels(providerId).includes(model)
   }
 
+  /**
+   * Single decision point for "what model do we send to the provider?".
+   * Trusts a non-empty stored model even if it's not in the cached list:
+   * the cache may be the static fallback while the live /v1/models fetch is
+   * still in flight, and the provider knows best what models are valid.
+   * Falls back to the provider's default only when nothing is stored.
+   */
+  resolveModel(providerId: string, storedModel: string | null | undefined): string {
+    if (storedModel && storedModel.length > 0) return storedModel
+    return this.getDefaultModel(providerId)
+  }
+
   async fetchAvailableModels(providerId: string, apiKey: string): Promise<string[]> {
     const provider = this.getProvider(providerId)
     if (!provider.fetchAvailableModels) {
@@ -93,6 +129,7 @@ class LLMService {
       if (models.length > 0) {
         this.modelCache.set(providerId, models)
         this.persistModelCache()
+        this.notify()
         return models
       }
     } catch (error) {

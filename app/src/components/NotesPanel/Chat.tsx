@@ -455,14 +455,8 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
         systemInstructions = systemInstructions + `\n\n${messageQuotedText}`
       }
 
-      // Resolve provider + model from storage. Trust the stored model: the
-      // user picked it in Settings against a live model list, and the cached
-      // fallback list may not include it after a fresh reload.
       const providerId = llmService.resolveProviderId(storageService.getProvider())
-      const storedModel = storageService.getModel()
-      const model = storedModel && storedModel.length > 0
-        ? storedModel
-        : llmService.getDefaultModel(providerId)
+      const model = llmService.resolveModel(providerId, storageService.getModel())
 
       // Send to LLM with conversation history
       const response = await llmService.sendMessage(providerId, apiKey, model, messageToSend, systemInstructions || undefined, conversationHistory)

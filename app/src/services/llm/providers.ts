@@ -10,6 +10,17 @@ export interface TestConnectionResult {
 const OPENAI_FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
 const OPENAI_CHAT_MODEL_PREFIXES = ['gpt-', 'o1-', 'o3-', 'o4-', 'chatgpt-']
 
+/**
+ * Map HTTP auth failures to a user-facing message. The provider's raw error
+ * (e.g. "invalid x-api-key" from Anthropic) leaks implementation details users
+ * shouldn't have to think about.
+ */
+function authErrorMessage(status: number): string | null {
+  if (status === 401) return 'Invalid API key.'
+  if (status === 403) return 'This API key is not authorised for this provider.'
+  return null
+}
+
 export class OpenAIProvider implements LLMProvider {
   name = 'OpenAI'
 
@@ -50,6 +61,8 @@ export class OpenAIProvider implements LLMProvider {
       })
 
       if (!response.ok) {
+        const friendly = authErrorMessage(response.status)
+        if (friendly) return { success: false, message: friendly }
         const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
         const rawMessage = error.error?.message || 'Failed to connect to OpenAI'
         return {
@@ -110,6 +123,8 @@ export class OpenAIProvider implements LLMProvider {
     })
 
     if (!response.ok) {
+      const friendly = authErrorMessage(response.status)
+      if (friendly) throw new Error(friendly)
       let errorMessage = 'Failed to send message to OpenAI'
       try {
         const error = await response.json()
@@ -181,6 +196,8 @@ export class AnthropicProvider implements LLMProvider {
       })
 
       if (!response.ok) {
+        const friendly = authErrorMessage(response.status)
+        if (friendly) return { success: false, message: friendly }
         const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
         const rawMessage = error.error?.message || 'Failed to connect to Anthropic'
         return {
@@ -237,6 +254,8 @@ export class AnthropicProvider implements LLMProvider {
     })
 
     if (!response.ok) {
+      const friendly = authErrorMessage(response.status)
+      if (friendly) throw new Error(friendly)
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))
       const rawMessage = error.error?.message || 'Failed to send message to Anthropic'
       throw new Error(sanitizeErrorMessage(rawMessage))
