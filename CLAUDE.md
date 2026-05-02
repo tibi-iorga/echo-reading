@@ -32,7 +32,8 @@ The app source lives in `app/`. All npm commands must be run from the `app/` dir
 All commands run from the `app/` directory:
 
 ```bash
-npm run dev              # Dev server at localhost:5173
+npm run dev              # SPA + local API server (port 5173, with /api/* working)
+npm run dev:vite-only    # SPA only (no /api/*) — useful for pure UI work
 npm run build            # TypeScript check + Vite production build
 npm run lint             # ESLint (errors on unused vars, warns on react-refresh)
 npm run test:run         # Unit tests (Vitest, single run)
@@ -42,6 +43,18 @@ npm run test:e2e         # Full Playwright E2E suite
 npx playwright test tests/e2e/deployment-critical.spec.ts  # Stable E2E subset (preferred pre-deploy)
 npm run version:patch    # Bump patch version (also minor, major)
 ```
+
+### Local dev architecture
+
+`npm run dev` runs two processes concurrently:
+
+- **Vite** on `localhost:5173` — serves the SPA.
+- **Local API server** on `localhost:4000` — `dev/server.ts` mounts every `app/api/**/*.ts` handler as an Express route. Vite's dev server proxies `/api/*` to it (configured in `vite.config.ts`), so the SPA can call the API on the same origin just like in production.
+
+The local API server reads env vars from `.env*` files using Vite's precedence:
+`.env.development.local` > `.env.local` > `.env.development` > `.env`. Use `.env.development.local` for local-only overrides (e.g. test Clerk instance instead of production).
+
+We do **not** use `vercel dev`. Vercel still deploys `app/api/*` as serverless functions to production unchanged; the local Express server is a dev-only mirror. This keeps local dev fast (no cold starts) and avoids env-injection conflicts with Vercel cloud env vars.
 
 Run a single test file: `npx vitest run src/utils/filenameParser.test.ts`
 
