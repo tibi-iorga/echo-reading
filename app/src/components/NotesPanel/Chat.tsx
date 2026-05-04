@@ -714,7 +714,7 @@ export function Chat({ quotedText, onQuotedTextClear, messages: externalMessages
                   setIncludePageContext(e.target.checked)
                   if (e.target.checked) setContextPageCount(1)
                 }}
-                disabled={!currentPageText || isLoading}
+                disabled={!pdfUrl || isLoading}
                 className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 focus:ring-blue-500 bg-white dark:bg-gray-700"
               />
               <span className="leading-none">Include page context</span>

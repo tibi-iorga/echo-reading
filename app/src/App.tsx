@@ -59,6 +59,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   const [lastPageRead, setLastPageRead] = useState<number | null>(null)
   const [currentPageText, setCurrentPageText] = useState<string>('')
   const pageTextCache = useRef<Map<number, string>>(new Map())
+  const loadedPdfDoc = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState<number>(384)
   const sidebarWidthDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null)
@@ -203,6 +204,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
   useEffect(() => {
     if (!pdf) {
       pageTextCache.current.clear()
+      loadedPdfDoc.current = null
       setCurrentPageText('')
     }
   }, [pdf])
@@ -450,8 +452,11 @@ function App({ bookId, book, pdfUrl }: AppProps) {
         return
       }
 
-      // Extract text if not cached
-      extractPageText(pdf.url, currentPage)
+      // Extract text if not cached — prefer the already-loaded doc to avoid re-fetching an expired presigned URL
+      const extractPromise = loadedPdfDoc.current
+        ? extractPageText(loadedPdfDoc.current, currentPage)
+        : extractPageText(pdf.url, currentPage)
+      extractPromise
         .then((text) => {
           pageTextCache.current.set(currentPage, text)
           setCurrentPageText(text)
@@ -595,6 +600,7 @@ function App({ bookId, book, pdfUrl }: AppProps) {
             onPageDimensionsChange={handlePageDimensionsChange}
             onContainerDimensionsChange={handleContainerDimensionsChange}
             onNumPagesChange={handleNumPagesChange}
+            onDocumentLoad={(doc) => { loadedPdfDoc.current = doc }}
             scale={scale}
             onScaleChange={setScale}
             onHighlightClick={handleHighlightClick}

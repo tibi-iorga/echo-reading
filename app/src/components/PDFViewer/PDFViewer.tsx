@@ -3,6 +3,7 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 import type { PDFDocument } from '@/types'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { SelectionActions } from './SelectionActions'
 import { HighlightOverlay } from './HighlightOverlay'
 import { HighlightNoteModal } from './HighlightNoteModal'
@@ -23,6 +24,7 @@ interface PDFViewerProps {
   onNavigateToPage?: (pageNumber: number) => void
   onScaleChange?: (scale: number) => void
   onNumPagesChange?: (numPages: number) => void
+  onDocumentLoad?: (doc: PDFDocumentProxy) => void
   scale?: number
   onPageDimensionsChange?: (dimensions: { width: number; height: number } | null) => void
   containerRef?: React.RefObject<HTMLDivElement>
@@ -31,7 +33,7 @@ interface PDFViewerProps {
   selectedHighlightId?: string | null
 }
 
-export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange: _onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, scale: externalScale, onPageDimensionsChange, containerRef: externalContainerRef, onContainerDimensionsChange, onHighlightClick, selectedHighlightId }: PDFViewerProps) {
+export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlights = [], currentPage, onPageChange: _onPageChange, onScaleChange: _onScaleChange, onNumPagesChange, onDocumentLoad, scale: externalScale, onPageDimensionsChange, containerRef: externalContainerRef, onContainerDimensionsChange, onHighlightClick, selectedHighlightId }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [_internalScale, _setInternalScale] = useState<number>(1.0)
@@ -170,10 +172,11 @@ export function PDFViewer({ pdf, onTextSelect, onHighlight, onSendToLLM, highlig
     }
   }, [pageNumber, isPageRendered, preloadedPages])
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
-    onNumPagesChange?.(numPages)
-  }, [onNumPagesChange])
+  const onDocumentLoadSuccess = useCallback((doc: PDFDocumentProxy) => {
+    setNumPages(doc.numPages)
+    onNumPagesChange?.(doc.numPages)
+    onDocumentLoad?.(doc)
+  }, [onNumPagesChange, onDocumentLoad])
 
   // Reserved for future use
   // const goToPage = useCallback((page: number) => {
